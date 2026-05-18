@@ -24,7 +24,7 @@ export async function extractParagraphs(base64: string): Promise<Paragraph[]> {
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-haiku-3-5',
+      model: 'claude-opus-4-5',
       max_tokens: 4096,
       messages: [
         {
