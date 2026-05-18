@@ -116,7 +116,10 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
             contentContainerStyle={styles.recentList}
             renderItem={({ item }) => (
               <TouchableOpacity style={styles.recentItem} onPress={() => openCached(item)}>
-                <Image source={{ uri: item.localImagePath }} style={styles.recentThumb} />
+                <Image
+                  source={{ uri: `data:image/jpeg;base64,${item.thumbBase64}` }}
+                  style={styles.recentThumb}
+                />
                 <Text style={styles.recentTime}>{formatTime(item.timestamp)}</Text>
               </TouchableOpacity>
             )}

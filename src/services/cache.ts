@@ -1,35 +1,37 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { Paragraph } from './claude';
 
-const CACHE_KEY = 'recent_screens';
+const CACHE_KEY = 'recent_screens_v2';
 const MAX_ITEMS = 5;
-const CACHE_DIR = FileSystem.documentDirectory + 'cached_images/';
 
 export interface CachedScreen {
   id: string;
-  localImagePath: string;
+  thumbBase64: string;   // small 120px thumbnail stored as base64
+  imageUri: string;      // full-size image uri (for BoardScreen)
   paragraphs: Paragraph[];
   timestamp: number;
 }
 
-async function ensureCacheDir() {
-  const info = await FileSystem.getInfoAsync(CACHE_DIR);
-  if (!info.exists) {
-    await FileSystem.makeDirectoryAsync(CACHE_DIR, { intermediates: true });
-  }
-}
-
-export async function saveToCache(imageUri: string, paragraphs: Paragraph[]): Promise<void> {
+export async function saveToCache(
+  imageUri: string,
+  paragraphs: Paragraph[]
+): Promise<void> {
   try {
-    await ensureCacheDir();
-    const id = Date.now().toString();
-    const localImagePath = CACHE_DIR + id + '.jpg';
+    // Make a tiny thumbnail for display
+    const thumb = await ImageManipulator.manipulateAsync(
+      imageUri,
+      [{ resize: { width: 120 } }],
+      { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+    );
 
-    // Copy image to permanent location
-    await FileSystem.copyAsync({ from: imageUri, to: localImagePath });
-
-    const newItem: CachedScreen = { id, localImagePath, paragraphs, timestamp: Date.now() };
+    const newItem: CachedScreen = {
+      id: Date.now().toString(),
+      thumbBase64: thumb.base64 || '',
+      imageUri,
+      paragraphs,
+      timestamp: Date.now(),
+    };
 
     const existing = await loadCache();
     const updated = [newItem, ...existing].slice(0, MAX_ITEMS);
@@ -43,29 +45,12 @@ export async function loadCache(): Promise<CachedScreen[]> {
   try {
     const raw = await AsyncStorage.getItem(CACHE_KEY);
     if (!raw) return [];
-    const items: CachedScreen[] = JSON.parse(raw);
-    // Filter out items whose image files no longer exist
-    const valid: CachedScreen[] = [];
-    for (const item of items) {
-      const info = await FileSystem.getInfoAsync(item.localImagePath);
-      if (info.exists) valid.push(item);
-    }
-    return valid;
+    return JSON.parse(raw) as CachedScreen[];
   } catch (e) {
     return [];
   }
 }
 
 export async function clearCache(): Promise<void> {
-  try {
-    const items = await loadCache();
-    for (const item of items) {
-      await FileSystem.deleteAsync(item.localImagePath, { idempotent: true });
-    }
-    await AsyncStorage.removeItem(CACHE_KEY);
-    // Remove dir
-    await FileSystem.deleteAsync(CACHE_DIR, { idempotent: true });
-  } catch (e) {
-    console.warn('Cache clear failed:', e);
-  }
+  await AsyncStorage.removeItem(CACHE_KEY);
 }
