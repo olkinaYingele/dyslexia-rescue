@@ -1,0 +1,6 @@
+*.xcuserstate
+xcuserdata/
+.DS_Store
+*.xcworkspace/xcuserdata/
+DerivedData/
+Config.swift

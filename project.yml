@@ -1,0 +1,26 @@
+name: Reader
+options:
+  bundleIdPrefix: com.olga
+  deploymentTarget:
+    iOS: "16.0"
+  xcodeVersion: "15"
+
+targets:
+  Reader:
+    type: application
+    platform: iOS
+    sources:
+      - path: ReaderApp
+    info:
+      path: ReaderApp/Info.plist
+      properties:
+        CFBundleDisplayName: קורא
+        NSCameraUsageDescription: נדרש לצילום הלוח
+        NSPhotoLibraryUsageDescription: נדרש לבחירת תמונה מהגלריה
+        UILaunchStoryboardName: ""
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+    settings:
+      SWIFT_VERSION: "5.9"
+      TARGETED_DEVICE_FAMILY: "1"
+      PRODUCT_BUNDLE_IDENTIFIER: com.olga.reader
