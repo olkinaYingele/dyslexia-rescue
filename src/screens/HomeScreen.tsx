@@ -73,7 +73,8 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
   };
 
   const openCached = (item: CachedScreen) => {
-    onParagraphsReady(item.paragraphs, item.permImagePath);
+    const uri = `data:image/jpeg;base64,${item.imageBase64}`;
+    onParagraphsReady(item.paragraphs, uri);
   };
 
   const formatTime = (ts: number) => {
