@@ -1,44 +1,33 @@
 import React, { useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import HomeScreen from './src/screens/HomeScreen';
-import ParagraphsScreen from './src/screens/ParagraphsScreen';
-import ReadingScreen from './src/screens/ReadingScreen';
+import BoardScreen from './src/screens/BoardScreen';
 import { Paragraph } from './src/services/claude';
 
-type Screen = 'home' | 'paragraphs' | 'reading';
+type Screen = 'home' | 'board';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home');
   const [paragraphs, setParagraphs] = useState<Paragraph[]>([]);
-  const [selectedParagraph, setSelectedParagraph] = useState<Paragraph | null>(null);
+  const [imageUri, setImageUri] = useState('');
 
   const handleParagraphsReady = (p: Paragraph[], uri: string) => {
     setParagraphs(p);
-    setScreen('paragraphs');
-  };
-
-  const handleSelectParagraph = (p: Paragraph) => {
-    setSelectedParagraph(p);
-    setScreen('reading');
+    setImageUri(uri);
+    setScreen('board');
   };
 
   return (
     <>
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
       {screen === 'home' && (
         <HomeScreen onParagraphsReady={handleParagraphsReady} />
       )}
-      {screen === 'paragraphs' && (
-        <ParagraphsScreen
+      {screen === 'board' && (
+        <BoardScreen
+          imageUri={imageUri}
           paragraphs={paragraphs}
-          onSelectParagraph={handleSelectParagraph}
           onBack={() => setScreen('home')}
-        />
-      )}
-      {screen === 'reading' && selectedParagraph && (
-        <ReadingScreen
-          paragraph={selectedParagraph}
-          onBack={() => setScreen('paragraphs')}
         />
       )}
     </>
