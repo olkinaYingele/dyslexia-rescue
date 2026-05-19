@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  ActivityIndicator,
   SafeAreaView,
   FlatList,
   Image,
@@ -13,10 +12,11 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { extractParagraphs, Paragraph } from '../services/claude';
-import { saveToCache, loadCache, CachedScreen } from '../services/cache';
+import { saveToCache, loadCache, deleteFromCache, CachedScreen } from '../services/cache';
+import CircularLoader from '../components/CircularLoader';
 
 interface Props {
-  onParagraphsReady: (paragraphs: Paragraph[], imageUri: string) => void;
+  onParagraphsReady: (paragraphs: Paragraph[], imageUri: string, cacheId?: string) => void;
 }
 
 export default function HomeScreen({ onParagraphsReady }: Props) {
@@ -35,14 +35,9 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
     setLoading(true);
     setStatus('מכין תמונה...');
     try {
-      // First pass: bake in EXIF rotation by doing a no-op flip+flip
-      // This forces ImageManipulator to apply the EXIF orientation
       const oriented = await ImageManipulator.manipulateAsync(
-        uri,
-        [],
-        { compress: 1, format: ImageManipulator.SaveFormat.JPEG }
+        uri, [], { compress: 1, format: ImageManipulator.SaveFormat.JPEG }
       );
-      // Second pass: resize to max 1200px on longest side
       const { width: w, height: h } = oriented;
       const maxDim = 1200;
       const scale = Math.min(maxDim / Math.max(w, h), 1);
@@ -51,9 +46,8 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
         [{ resize: { width: Math.round(w * scale), height: Math.round(h * scale) } }],
         { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: true }
       );
-      const base64 = manipulated.base64 || '';
       setStatus('מנתח טקסט...');
-      const paragraphs = await extractParagraphs(base64);
+      const paragraphs = await extractParagraphs(manipulated.base64 || '');
       if (paragraphs.length === 0) {
         Alert.alert('לא נמצא טקסט', 'לא זוהה טקסט עברי בתמונה. נסה שוב.');
         return;
@@ -84,8 +78,20 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
   };
 
   const openCached = (item: CachedScreen) => {
-    const uri = `data:image/jpeg;base64,${item.imageBase64}`;
-    onParagraphsReady(item.paragraphs, uri);
+    onParagraphsReady(item.paragraphs, `data:image/jpeg;base64,${item.imageBase64}`, item.id);
+  };
+
+  const handleDelete = (item: CachedScreen) => {
+    Alert.alert('מחיקה', 'למחוק את התמונה הזו?', [
+      { text: 'ביטול', style: 'cancel' },
+      {
+        text: 'מחק', style: 'destructive',
+        onPress: async () => {
+          await deleteFromCache(item.id);
+          await refreshCache();
+        },
+      },
+    ]);
   };
 
   const formatTime = (ts: number) => {
@@ -100,10 +106,7 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
       <Text style={styles.subtitle}>צלם את הלוח או הספר</Text>
 
       {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#4A90E2" />
-          <Text style={styles.loadingText}>{status}</Text>
-        </View>
+        <CircularLoader size={90} status={status} />
       ) : (
         <View style={styles.buttons}>
           <TouchableOpacity style={styles.mainButton} onPress={takePhoto}>
@@ -127,13 +130,18 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.recentList}
             renderItem={({ item }) => (
-              <TouchableOpacity style={styles.recentItem} onPress={() => openCached(item)}>
-                <Image
-                  source={{ uri: `data:image/jpeg;base64,${item.thumbBase64}` }}
-                  style={styles.recentThumb}
-                />
+              <View style={styles.recentItem}>
+                <TouchableOpacity onPress={() => openCached(item)}>
+                  <Image
+                    source={{ uri: `data:image/jpeg;base64,${item.thumbBase64}` }}
+                    style={styles.recentThumb}
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(item)}>
+                  <Text style={styles.deleteBtnText}>✕</Text>
+                </TouchableOpacity>
                 <Text style={styles.recentTime}>{formatTime(item.timestamp)}</Text>
-              </TouchableOpacity>
+              </View>
             )}
           />
         </View>
@@ -158,8 +166,6 @@ const styles = StyleSheet.create({
   },
   buttonIcon: { fontSize: 48, marginBottom: 8 },
   buttonText: { fontSize: 24, fontWeight: '600', color: '#2C3E50' },
-  loadingContainer: { alignItems: 'center', gap: 20 },
-  loadingText: { fontSize: 20, color: '#4A90E2', textAlign: 'center' },
   recentSection: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingBottom: 16 },
   recentTitle: {
     fontSize: 16, fontWeight: '700', color: '#7F8C8D',
@@ -171,5 +177,12 @@ const styles = StyleSheet.create({
     width: 80, height: 80, borderRadius: 12,
     borderWidth: 2, borderColor: '#4A90E2',
   },
+  deleteBtn: {
+    position: 'absolute', top: -6, right: -6,
+    width: 22, height: 22, borderRadius: 11,
+    backgroundColor: '#E74C3C',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  deleteBtnText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
   recentTime: { fontSize: 11, color: '#95A5A6', textAlign: 'center' },
 });

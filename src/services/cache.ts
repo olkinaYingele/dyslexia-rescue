@@ -58,6 +58,12 @@ export async function loadCache(): Promise<CachedScreen[]> {
   }
 }
 
+export async function deleteFromCache(id: string): Promise<void> {
+  const items = await loadCache();
+  const updated = items.filter(i => i.id !== id);
+  await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(updated));
+}
+
 export async function clearCache(): Promise<void> {
   await AsyncStorage.removeItem(CACHE_KEY);
 }

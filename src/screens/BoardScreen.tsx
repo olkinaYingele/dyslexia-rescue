@@ -7,8 +7,8 @@ import {
   Text,
   SafeAreaView,
   LayoutChangeEvent,
-  Dimensions,
   ScrollView,
+  Alert,
 } from 'react-native';
 import * as Speech from 'expo-speech';
 import { Paragraph } from '../services/claude';
@@ -17,11 +17,12 @@ interface Props {
   imageUri: string;
   paragraphs: Paragraph[];
   onBack: () => void;
+  onDelete?: () => void;
 }
 
 const COLORS = ['#E74C3C', '#2980B9', '#27AE60', '#8E44AD', '#F39C12', '#16A085', '#D35400', '#2C3E50'];
 
-export default function BoardScreen({ imageUri, paragraphs, onBack }: Props) {
+export default function BoardScreen({ imageUri, paragraphs, onBack, onDelete }: Props) {
   const [imageLayout, setImageLayout] = useState<{ width: number; height: number } | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(null);
   const [activeParagraph, setActiveParagraph] = useState<Paragraph | null>(null);
@@ -99,6 +100,16 @@ export default function BoardScreen({ imageUri, paragraphs, onBack }: Props) {
         <Text style={styles.hint}>
           {isPlaying ? '⏸ מקריא...' : 'בחר קטע לקריאה'}
         </Text>
+        {onDelete && (
+          <TouchableOpacity onPress={() => {
+            Alert.alert('מחיקה', 'למחוק תמונה זו מהאחרונים?', [
+              { text: 'ביטול', style: 'cancel' },
+              { text: 'מחק', style: 'destructive', onPress: () => { stopReading(); onDelete(); } },
+            ]);
+          }}>
+            <Text style={styles.deleteText}>🗑</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Image with boxes */}
@@ -176,6 +187,7 @@ const styles = StyleSheet.create({
   },
   backText: { fontSize: 17, color: '#4A90E2', fontWeight: '600' },
   hint: { fontSize: 16, color: '#FFFFFF', fontWeight: '600' },
+  deleteText: { fontSize: 20 },
   imageWrapper: { flex: 1, position: 'relative' },
   image: { width: '100%', height: '100%' },
   box: {
