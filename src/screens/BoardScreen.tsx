@@ -64,18 +64,21 @@ export default function BoardScreen({ imageUri, paragraphs, onBack }: Props) {
     setCurrentWordIndex(0);
     setIsPlaying(true);
 
-    Speech.speak(p.text, {
-      language: 'he-IL',
-      rate: 0.85,
-      onBoundary: (event) => {
-        const upToChar = p.text.slice(0, event.charIndex);
-        const wordsBefore = upToChar.trim().split(/\s+/).filter(w => w.length > 0);
-        setCurrentWordIndex(wordsBefore.length);
-      },
-      onDone: () => { setIsPlaying(false); setCurrentWordIndex(-1); },
-      onStopped: () => { setIsPlaying(false); setCurrentWordIndex(-1); },
-      onError: () => { setIsPlaying(false); setCurrentWordIndex(-1); },
-    });
+    // Small delay so iOS audio session initializes after touch event
+    setTimeout(() => {
+      Speech.speak(p.text, {
+        language: 'he-IL',
+        rate: 0.85,
+        onBoundary: (event) => {
+          const upToChar = p.text.slice(0, event.charIndex);
+          const wordsBefore = upToChar.trim().split(/\s+/).filter(w => w.length > 0);
+          setCurrentWordIndex(wordsBefore.length);
+        },
+        onDone: () => { setIsPlaying(false); setCurrentWordIndex(-1); },
+        onStopped: () => { setIsPlaying(false); setCurrentWordIndex(-1); },
+        onError: () => { setIsPlaying(false); setCurrentWordIndex(-1); },
+      });
+    }, 150);
   }, []);
 
   const stopReading = () => {

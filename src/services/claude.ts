@@ -40,30 +40,32 @@ export async function extractParagraphs(base64: string): Promise<Paragraph[]> {
             },
             {
               type: 'text',
-              text: `Look at this image and identify the distinct TEXT BLOCKS (not individual lines).
-A block = a group of lines that belong together logically (a title, a paragraph, a column, a section).
+              text: `You are analyzing an image to help a child with dyslexia. Find all readable TEXT BLOCKS.
+
+This could be a whiteboard, a book page, a worksheet, or a poster.
+- IGNORE illustrations, photos, logos, and decorative elements
+- ONLY identify areas that contain actual readable text
+- Group lines that belong together into ONE block
 
 Return ONLY this JSON, no explanations:
 
 {
   "paragraphs": [
     {
-      "text": "full text of the block, all lines joined",
+      "text": "full text of the block, all lines joined with spaces",
       "box": { "x": 0.05, "y": 0.10, "width": 0.90, "height": 0.20 }
     }
   ]
 }
 
-CRITICAL box rules (values 0.0–1.0, relative to full image dimensions):
-- x, y = top-left corner of the bounding box
-- width, height = size of the bounding box
-- The box must TIGHTLY wrap the actual text pixels — not too big, not too small
-- Add ~0.01 padding on each side
-- A block with 3 lines of text at 30% height should have y≈0.28, height≈0.12
-- NEVER use height < 0.04 for any real text block
-- Group related lines into ONE block (e.g. title+subtitle, all date lines together)
-- Separate blocks only when there is clear visual separation
-- Hebrew order: right-to-left, top-to-bottom`,
+CRITICAL box rules (values 0.0–1.0, relative to full image size):
+- x, y = top-left corner of the text block
+- width, height = must TIGHTLY wrap ALL lines of the block
+- Measure carefully: if text starts at 15% from top and ends at 35%, use y=0.15, height=0.20
+- NEVER height < 0.05 for a real text block
+- For books: the story text is ONE block, author line is SEPARATE block
+- For whiteboards: each logical section (title, left column, right column) is a block
+- Order: top to bottom, right to left for Hebrew`,
             },
           ],
         },
