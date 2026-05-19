@@ -35,9 +35,20 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
     setLoading(true);
     setStatus('מכין תמונה...');
     try {
-      const manipulated = await ImageManipulator.manipulateAsync(
+      // First pass: bake in EXIF rotation by doing a no-op flip+flip
+      // This forces ImageManipulator to apply the EXIF orientation
+      const oriented = await ImageManipulator.manipulateAsync(
         uri,
-        [{ resize: { width: 1200 } }],
+        [],
+        { compress: 1, format: ImageManipulator.SaveFormat.JPEG }
+      );
+      // Second pass: resize to max 1200px on longest side
+      const { width: w, height: h } = oriented;
+      const maxDim = 1200;
+      const scale = Math.min(maxDim / Math.max(w, h), 1);
+      const manipulated = await ImageManipulator.manipulateAsync(
+        oriented.uri,
+        [{ resize: { width: Math.round(w * scale), height: Math.round(h * scale) } }],
         { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: true }
       );
       const base64 = manipulated.base64 || '';
