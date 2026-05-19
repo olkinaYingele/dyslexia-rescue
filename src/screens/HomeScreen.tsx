@@ -13,7 +13,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { extractParagraphs, Paragraph } from '../services/claude';
 import { saveToCache, loadCache, deleteFromCache, CachedScreen } from '../services/cache';
-import CircularLoader from '../components/CircularLoader';
+import ProgressLoader from '../components/ProgressLoader';
 
 interface Props {
   onParagraphsReady: (paragraphs: Paragraph[], imageUri: string, cacheId?: string) => void;
@@ -22,6 +22,7 @@ interface Props {
 export default function HomeScreen({ onParagraphsReady }: Props) {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
+  const [done, setDone] = useState(false);
   const [recent, setRecent] = useState<CachedScreen[]>([]);
 
   const refreshCache = useCallback(async () => {
@@ -33,6 +34,7 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
 
   const processImage = async (uri: string) => {
     setLoading(true);
+    setDone(false);
     setStatus('מכין תמונה...');
     try {
       const oriented = await ImageManipulator.manipulateAsync(
@@ -52,6 +54,8 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
         Alert.alert('לא נמצא טקסט', 'לא זוהה טקסט עברי בתמונה. נסה שוב.');
         return;
       }
+      setDone(true);
+      await new Promise(r => setTimeout(r, 400)); // show 100% briefly
       await saveToCache(manipulated.uri, paragraphs);
       await refreshCache();
       onParagraphsReady(paragraphs, manipulated.uri);
@@ -106,7 +110,7 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
       <Text style={styles.subtitle}>צלם את הלוח או הספר</Text>
 
       {loading ? (
-        <CircularLoader size={90} status={status} />
+        <ProgressLoader status={status} done={done} />
       ) : (
         <View style={styles.buttons}>
           <TouchableOpacity style={styles.mainButton} onPress={takePhoto}>

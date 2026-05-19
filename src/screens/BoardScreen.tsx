@@ -100,16 +100,6 @@ export default function BoardScreen({ imageUri, paragraphs, onBack, onDelete }: 
         <Text style={styles.hint}>
           {isPlaying ? '⏸ מקריא...' : 'בחר קטע לקריאה'}
         </Text>
-        {onDelete && (
-          <TouchableOpacity onPress={() => {
-            Alert.alert('מחיקה', 'למחוק תמונה זו מהאחרונים?', [
-              { text: 'ביטול', style: 'cancel' },
-              { text: 'מחק', style: 'destructive', onPress: () => { stopReading(); onDelete(); } },
-            ]);
-          }}>
-            <Text style={styles.deleteText}>🗑</Text>
-          </TouchableOpacity>
-        )}
       </View>
 
       {/* Image with boxes */}
@@ -147,31 +137,43 @@ export default function BoardScreen({ imageUri, paragraphs, onBack, onDelete }: 
         })}
       </View>
 
-      {/* Bottom reading panel */}
-      {activeParagraph && (
-        <View style={styles.readingPanel}>
-          <ScrollView style={styles.wordScroll} showsVerticalScrollIndicator={false}>
-            <Text style={styles.wordLine}>
-              {words.map((word, i) => (
-                <Text
-                  key={i}
-                  style={[styles.word, i === currentWordIndex && styles.activeWord]}
-                >
-                  {i > 0 ? ' ' : ''}{word}
-                </Text>
-              ))}
-            </Text>
-          </ScrollView>
-          <View style={styles.panelControls}>
+      {/* Bottom panel */}
+      <View style={styles.bottomPanel}>
+        {activeParagraph && (
+          <>
+            <ScrollView style={styles.wordScroll} showsVerticalScrollIndicator={false}>
+              <Text style={styles.wordLine}>
+                {words.map((word, i) => (
+                  <Text
+                    key={i}
+                    style={[styles.word, i === currentWordIndex && styles.activeWord]}
+                  >
+                    {i > 0 ? ' ' : ''}{word}
+                  </Text>
+                ))}
+              </Text>
+            </ScrollView>
             <TouchableOpacity
               style={[styles.controlBtn, isPlaying ? styles.pauseBtn : styles.playBtn]}
               onPress={() => isPlaying ? stopReading() : startReading(activeParagraph)}
             >
               <Text style={styles.controlBtnText}>{isPlaying ? '⏸ עצור' : '▶ המשך'}</Text>
             </TouchableOpacity>
-          </View>
-        </View>
-      )}
+          </>
+        )}
+
+        {onDelete && (
+          <TouchableOpacity
+            style={styles.deleteBtn}
+            onPress={() => Alert.alert('מחיקה', 'למחוק תמונה זו מהאחרונים?', [
+              { text: 'ביטול', style: 'cancel' },
+              { text: 'מחק', style: 'destructive', onPress: () => { stopReading(); onDelete(); } },
+            ])}
+          >
+            <Text style={styles.deleteBtnText}>🗑  מחק מהאחרונים</Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </SafeAreaView>
   );
 }
@@ -212,15 +214,14 @@ const styles = StyleSheet.create({
   },
   badgeText: { color: '#FFF', fontSize: 13, fontWeight: 'bold' },
 
-  // Reading panel at bottom
-  readingPanel: {
+  bottomPanel: {
     backgroundColor: '#FFFEF5',
-    maxHeight: 160,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 8,
+    paddingBottom: 12,
+    gap: 10,
   },
   wordScroll: { maxHeight: 90 },
   wordLine: {
@@ -241,17 +242,21 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1A1A1A',
   },
-  panelControls: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
   controlBtn: {
     borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 40,
+    paddingVertical: 10,
+    alignItems: 'center',
   },
   playBtn: { backgroundColor: '#4A90E2' },
   pauseBtn: { backgroundColor: '#E74C3C' },
   controlBtnText: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
+  deleteBtn: {
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  deleteBtnText: { color: '#E74C3C', fontSize: 16, fontWeight: '600' },
 });
