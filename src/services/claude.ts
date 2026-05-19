@@ -1,10 +1,10 @@
 import { ANTHROPIC_API_KEY } from '../config';
 
 export interface BoundingBox {
-  x: number;      // 0..1 relative to image width
-  y: number;      // 0..1 relative to image height
-  width: number;  // 0..1
-  height: number; // 0..1
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 export interface Paragraph {
@@ -14,87 +14,109 @@ export interface Paragraph {
   box: BoundingBox;
 }
 
-export async function extractParagraphs(base64: string): Promise<Paragraph[]> {
+const HEADERS = {
+  'Content-Type': 'application/json',
+  'x-api-key': ANTHROPIC_API_KEY,
+  'anthropic-version': '2023-06-01',
+};
 
+async function claudeRequest(messages: any[], maxTokens = 4096): Promise<string> {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
+    headers: HEADERS,
     body: JSON.stringify({
       model: 'claude-opus-4-5',
-      max_tokens: 4096,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: 'image/jpeg',
-                data: base64,
-              },
-            },
-            {
-              type: 'text',
-              text: `You are analyzing an image to help a child with dyslexia. Find all readable TEXT BLOCKS.
+      max_tokens: maxTokens,
+      messages,
+    }),
+  });
+  if (!response.ok) throw new Error(`Claude API error: ${await response.text()}`);
+  const data = await response.json();
+  return data.content[0].text;
+}
 
-This could be a whiteboard, a book page, a worksheet, or a poster.
-- IGNORE illustrations, photos, logos, and decorative elements
-- ONLY identify areas that contain actual readable text
-- Group lines that belong together into ONE block
+// Pass 1: extract text only, with maximum accuracy
+async function extractText(base64: string): Promise<string[]> {
+  const result = await claudeRequest([{
+    role: 'user',
+    content: [
+      {
+        type: 'image',
+        source: { type: 'base64', media_type: 'image/jpeg', data: base64 },
+      },
+      {
+        type: 'text',
+        text: `זוהי תמונה של לוח עם כתב יד בעברית.
+משימתך: לקרוא את הטקסט בדייקנות מרבית.
 
-Return ONLY this JSON, no explanations:
+הנחיות לקריאה:
+- קרא כל מילה בזהירות. אם אות לא ברורה, השתמש בהקשר של המשפט כדי לנחש נכון
+- שים לב להבדלים בין: ב/כ, ד/ר, ה/ח, ו/ז, מ/ס, נ/ג
+- עדיף מילה שלמה ומובנת על פני אותיות נפרדות
+- שמור על סדר קריאה: מימין לשמאל, מלמעלה למטה
+- כל בלוק/עמודה נפרדת = שורה נפרדת בתשובה
 
+החזר רק את הטקסט, כל בלוק בשורה נפרדת, ללא הסברים:`,
+      },
+    ],
+  }]);
+  return result.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+}
+
+// Pass 2: given the texts, find their bounding boxes
+async function locateBlocks(base64: string, texts: string[]): Promise<BoundingBox[]> {
+  const numbered = texts.map((t, i) => `${i + 1}. "${t.slice(0, 60)}..."`).join('\n');
+
+  const result = await claudeRequest([{
+    role: 'user',
+    content: [
+      {
+        type: 'image',
+        source: { type: 'base64', media_type: 'image/jpeg', data: base64 },
+      },
+      {
+        type: 'text',
+        text: `בתמונה יש ${texts.length} בלוקי טקסט. מצא את המיקום של כל אחד.
+
+הבלוקים:
+${numbered}
+
+החזר JSON בלבד:
 {
-  "paragraphs": [
-    {
-      "text": "full text of the block, all lines joined with spaces",
-      "box": { "x": 0.05, "y": 0.10, "width": 0.90, "height": 0.20 }
-    }
+  "boxes": [
+    { "x": 0.05, "y": 0.10, "width": 0.90, "height": 0.15 },
+    ...
   ]
 }
 
-CRITICAL box rules (values 0.0–1.0, relative to full image size):
-- x, y = top-left corner of the text block
-- width, height = must TIGHTLY wrap ALL lines of the block
-- Measure carefully: if text starts at 15% from top and ends at 35%, use y=0.15, height=0.20
-- NEVER height < 0.05 for a real text block
-- For books: the story text is ONE block, author line is SEPARATE block
-- For whiteboards: each logical section (title, left column, right column) is a block
-- Order: top to bottom, right to left for Hebrew`,
-            },
-          ],
-        },
-      ],
-    }),
-  });
+כללים (ערכים 0.0–1.0 יחסית לגודל התמונה):
+- x, y = פינה שמאלית-עליונה של הבלוק
+- width, height = גודל הבלוק
+- הbox חייב לכסות את כל הטקסט בבלוק
+- סדר: לפי הסדר של הרשימה למעלה`,
+      },
+    ],
+  }]);
 
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Claude API error: ${error}`);
-  }
+  const match = result.match(/\{[\s\S]*\}/);
+  if (!match) return texts.map((_, i) => ({ x: 0.05, y: i * 0.2, width: 0.9, height: 0.18 }));
 
-  const data = await response.json();
-  const content = data.content[0].text;
+  const parsed = JSON.parse(match[0]);
+  return (parsed.boxes || []) as BoundingBox[];
+}
 
-  const jsonMatch = content.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    throw new Error('Could not parse response from Claude');
-  }
+export async function extractParagraphs(base64: string): Promise<Paragraph[]> {
+  // Pass 1: read text accurately
+  const texts = await extractText(base64);
+  if (texts.length === 0) return [];
 
-  const parsed = JSON.parse(jsonMatch[0]);
-  const paragraphs: Paragraph[] = (parsed.paragraphs || []).map(
-    (item: { text: string; box: BoundingBox }, index: number) => ({
-      id: `p-${index}`,
-      text: item.text?.trim() || '',
-      index,
-      box: item.box || { x: 0, y: index * 0.2, width: 1, height: 0.18 },
-    })
-  );
+  // Pass 2: locate each block in the image
+  const boxes = await locateBlocks(base64, texts);
 
-  return paragraphs.filter(p => p.text.length > 0);
+  return texts.map((text, index) => ({
+    id: `p-${index}`,
+    text,
+    index,
+    box: boxes[index] || { x: 0.05, y: index * 0.2, width: 0.9, height: 0.18 },
+  }));
 }

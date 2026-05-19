@@ -41,7 +41,7 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
         uri, [], { compress: 1, format: ImageManipulator.SaveFormat.JPEG }
       );
       const { width: w, height: h } = oriented;
-      const maxDim = 1200;
+      const maxDim = 1800;
       const scale = Math.min(maxDim / Math.max(w, h), 1);
       const manipulated = await ImageManipulator.manipulateAsync(
         oriented.uri,
