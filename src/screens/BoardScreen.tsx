@@ -16,18 +16,14 @@ import { Paragraph } from '../services/claude';
 interface Props {
   imageUri: string;
   paragraphs: Paragraph[];
-  isUnsaved?: boolean;
-  onSaveAndExit?: () => void;
-  onExitWithoutSaving?: () => void;
-  onDelete?: () => void;
+  isCached: boolean;
+  onExit: () => void;
+  onDelete: () => void;
 }
 
 const COLORS = ['#E74C3C', '#2980B9', '#27AE60', '#8E44AD', '#F39C12', '#16A085', '#D35400', '#2C3E50'];
 
-export default function BoardScreen({
-  imageUri, paragraphs,
-  isUnsaved, onSaveAndExit, onExitWithoutSaving, onDelete,
-}: Props) {
+export default function BoardScreen({ imageUri, paragraphs, isCached, onExit, onDelete }: Props) {
   const [imageLayout, setImageLayout] = useState<{ width: number; height: number } | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(null);
   const [activeParagraph, setActiveParagraph] = useState<Paragraph | null>(null);
@@ -99,18 +95,7 @@ export default function BoardScreen({
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => {
-          stopReading();
-          if (isUnsaved) {
-            Alert.alert('יציאה', 'מה לעשות עם התמונה?', [
-              { text: 'שמור וצא', onPress: onSaveAndExit },
-              { text: 'צא ללא שמירה', style: 'destructive', onPress: onExitWithoutSaving },
-              { text: 'ביטול', style: 'cancel' },
-            ]);
-          } else {
-            onExitWithoutSaving?.();
-          }
-        }}>
+        <TouchableOpacity onPress={() => { stopReading(); onExit(); }}>
           <Text style={styles.backText}>← יציאה</Text>
         </TouchableOpacity>
         <Text style={styles.hint}>
@@ -178,17 +163,14 @@ export default function BoardScreen({
           </>
         )}
 
-        {onDelete && (
-          <TouchableOpacity
-            style={styles.deleteBtn}
-            onPress={() => Alert.alert('מחיקה', 'למחוק תמונה זו מהאחרונים?', [
-              { text: 'ביטול', style: 'cancel' },
-              { text: 'מחק', style: 'destructive', onPress: () => { stopReading(); onDelete(); } },
-            ])}
-          >
-            <Text style={styles.deleteBtnText}>🗑  מחק מהאחרונים</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={styles.deleteBtn}
+          onPress={() => { stopReading(); onDelete(); }}
+        >
+          <Text style={styles.deleteBtnText}>
+            {isCached ? '🗑  מחק מהאחרונים' : '✕  צא ללא שמירה'}
+          </Text>
+        </TouchableOpacity>
       </View>}
     </SafeAreaView>
   );

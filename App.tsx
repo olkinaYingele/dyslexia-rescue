@@ -24,21 +24,18 @@ export default function App() {
     setScreen('board');
   };
 
-  const handleSaveAndExit = async () => {
-    if (unsavedUri) {
-      await saveToCache(unsavedUri, paragraphs);
-    }
+  // Exit = save new scans automatically, just go home for cached
+  const handleExit = async () => {
+    if (unsavedUri) await saveToCache(unsavedUri, paragraphs);
     setUnsavedUri(null);
+    setCurrentCacheId(null);
     setScreen('home');
   };
 
-  const handleExitWithoutSaving = () => {
-    setUnsavedUri(null);
-    setScreen('home');
-  };
-
+  // Delete = remove from cache (cached) or discard without saving (new)
   const handleDelete = async () => {
     if (currentCacheId) await deleteFromCache(currentCacheId);
+    setUnsavedUri(null);
     setCurrentCacheId(null);
     setScreen('home');
   };
@@ -53,10 +50,9 @@ export default function App() {
         <BoardScreen
           imageUri={imageUri}
           paragraphs={paragraphs}
-          isUnsaved={!!unsavedUri}
-          onSaveAndExit={handleSaveAndExit}
-          onExitWithoutSaving={handleExitWithoutSaving}
-          onDelete={currentCacheId ? handleDelete : undefined}
+          isCached={!!currentCacheId}
+          onExit={handleExit}
+          onDelete={handleDelete}
         />
       )}
     </>
