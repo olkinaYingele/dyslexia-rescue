@@ -16,13 +16,18 @@ import { Paragraph } from '../services/claude';
 interface Props {
   imageUri: string;
   paragraphs: Paragraph[];
-  onBack: () => void;
+  isUnsaved?: boolean;
+  onSaveAndExit?: () => void;
+  onExitWithoutSaving?: () => void;
   onDelete?: () => void;
 }
 
 const COLORS = ['#E74C3C', '#2980B9', '#27AE60', '#8E44AD', '#F39C12', '#16A085', '#D35400', '#2C3E50'];
 
-export default function BoardScreen({ imageUri, paragraphs, onBack, onDelete }: Props) {
+export default function BoardScreen({
+  imageUri, paragraphs,
+  isUnsaved, onSaveAndExit, onExitWithoutSaving, onDelete,
+}: Props) {
   const [imageLayout, setImageLayout] = useState<{ width: number; height: number } | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(null);
   const [activeParagraph, setActiveParagraph] = useState<Paragraph | null>(null);
@@ -94,8 +99,19 @@ export default function BoardScreen({ imageUri, paragraphs, onBack, onDelete }: 
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => { stopReading(); onBack(); }}>
-          <Text style={styles.backText}>← צלם שוב</Text>
+        <TouchableOpacity onPress={() => {
+          stopReading();
+          if (isUnsaved) {
+            Alert.alert('יציאה', 'מה לעשות עם התמונה?', [
+              { text: 'שמור וצא', onPress: onSaveAndExit },
+              { text: 'צא ללא שמירה', style: 'destructive', onPress: onExitWithoutSaving },
+              { text: 'ביטול', style: 'cancel' },
+            ]);
+          } else {
+            onExitWithoutSaving?.();
+          }
+        }}>
+          <Text style={styles.backText}>← יציאה</Text>
         </TouchableOpacity>
         <Text style={styles.hint}>
           {isPlaying ? '⏸ מקריא...' : 'בחר קטע לקריאה'}
@@ -137,8 +153,8 @@ export default function BoardScreen({ imageUri, paragraphs, onBack, onDelete }: 
         })}
       </View>
 
-      {/* Bottom panel */}
-      <View style={styles.bottomPanel}>
+      {/* Bottom panel — only show if there's content */}
+      {(activeParagraph || onDelete) && <View style={styles.bottomPanel}>
         {activeParagraph && (
           <>
             <ScrollView style={styles.wordScroll} showsVerticalScrollIndicator={false}>
@@ -173,7 +189,7 @@ export default function BoardScreen({ imageUri, paragraphs, onBack, onDelete }: 
             <Text style={styles.deleteBtnText}>🗑  מחק מהאחרונים</Text>
           </TouchableOpacity>
         )}
-      </View>
+      </View>}
     </SafeAreaView>
   );
 }

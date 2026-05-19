@@ -16,7 +16,7 @@ import { saveToCache, loadCache, deleteFromCache, CachedScreen } from '../servic
 import ProgressLoader from '../components/ProgressLoader';
 
 interface Props {
-  onParagraphsReady: (paragraphs: Paragraph[], imageUri: string, cacheId?: string) => void;
+  onParagraphsReady: (paragraphs: Paragraph[], imageUri: string, cacheId?: string, originalUri?: string) => void;
 }
 
 export default function HomeScreen({ onParagraphsReady }: Props) {
@@ -56,9 +56,8 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
       }
       setDone(true);
       await new Promise(r => setTimeout(r, 400)); // show 100% briefly
-      await saveToCache(manipulated.uri, paragraphs);
-      await refreshCache();
-      onParagraphsReady(paragraphs, manipulated.uri);
+      // Don't auto-save — user will choose on exit
+      onParagraphsReady(paragraphs, manipulated.uri, undefined, manipulated.uri);
     } catch (e: any) {
       Alert.alert('שגיאה', e.message || 'אירעה שגיאה. נסה שוב.');
     } finally {
