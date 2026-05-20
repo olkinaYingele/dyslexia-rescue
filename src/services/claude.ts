@@ -1,4 +1,4 @@
-import { ANTHROPIC_API_KEY } from '../config';
+import { GEMINI_API_KEY } from '../config';
 
 export interface BoundingBox {
   x: number;
@@ -15,37 +15,16 @@ export interface Paragraph {
 }
 
 export async function extractParagraphs(base64: string): Promise<Paragraph[]> {
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-opus-4-5',
-      max_tokens: 4096,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: { type: 'base64', media_type: 'image/jpeg', data: base64 },
-            },
-            {
-              type: 'text',
-              text: `אתה מומחה לקריאת כתב יד בעברית מלוחות כיתה. זו משימת קריאה קריטית עבור ילד עם דיסלקציה.
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
-הקשר: מדובר בלוח של כיתת יסודי/חטיבה. המילים השכיחות ביותר:
+  const prompt = `אתה מומחה לקריאת כתב יד בעברית מלוחות כיתה. זו משימת קריאה קריטית עבור ילד עם דיסלקציה.
+
+הקשר: לוח של כיתת יסודי/חטיבה. המילים השכיחות ביותר:
 מבחן, שיעורי בית, דף עבודה, להגשה, ציון, נושא, שטח, היקף, חשבון, אנגלית, עברית, מדעים, היסטוריה, תנ״ך, יום שני/שלישי/רביעי/חמישי/שישי, לא למחוק, לג׳, חופש, מחר, השבוע.
 
-לפני שתכתוב JSON, חשוב בקול:
-1. סרוק את התמונה וזהה כמה בלוקים יש
-2. לכל בלוק — קרא אות אחר אות, ואז בדוק: האם זו מילה עברית מוכרת? אם לא — קרא שוב
-3. שים לב: ב ו-כ נראות דומות, ד ו-ר נראות דומות, ה ו-ח ו-ת נראות דומות, מ ו-ס נראות דומות
+זהה את כל בלוקי הטקסט בתמונה. לכל בלוק — קרא בעיון, שים לב לדמיון בין אותיות: ב/כ, ד/ר, ה/ח/ת, מ/ס.
 
-אחרי שחשבת — החזר JSON בלבד:
+החזר JSON בלבד (ללא markdown, ללא קוד בקשים):
 {
   "paragraphs": [
     {
@@ -55,21 +34,43 @@ export async function extractParagraphs(base64: string): Promise<Paragraph[]> {
   ]
 }
 
-כללי box (0.0–1.0 יחסית לתמונה): x,y = פינה שמאלית-עליונה, width/height = גודל הבלוק.`,
-            },
+כללי box (0.0–1.0 יחסית לתמונה): x,y = פינה שמאלית-עליונה, width/height = גודל הבלוק.
+חשוב: x+width ≤ 1.0 ו-y+height ≤ 1.0 תמיד.`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [
+        {
+          parts: [
+            { inline_data: { mime_type: 'image/jpeg', data: base64 } },
+            { text: prompt },
           ],
         },
       ],
+      generationConfig: {
+        temperature: 0.1,
+        maxOutputTokens: 8192,
+        thinkingConfig: {
+          thinkingBudget: 0,
+        },
+      },
     }),
   });
 
-  if (!response.ok) throw new Error(`Claude API error: ${await response.text()}`);
+  if (!response.ok) throw new Error(`Gemini API error: ${await response.text()}`);
 
   const data = await response.json();
-  const content = data.content[0].text;
+  // 2.5-flash is a thinking model — find the non-thought part
+  const parts = data.candidates?.[0]?.content?.parts || [];
+  const content = parts.find((p: any) => !p.thought)?.text ?? parts[0]?.text;
+  if (!content) throw new Error('Empty response from Gemini');
 
-  const jsonMatch = content.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error('Could not parse response from Claude');
+  // Strip markdown code fences if present
+  const cleaned = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error('Could not parse response from Gemini');
 
   const parsed = JSON.parse(jsonMatch[0]);
   return (parsed.paragraphs || [])
