@@ -22,6 +22,19 @@ interface Props {
 
 const COLORS = ['#E74C3C', '#2980B9', '#27AE60', '#8E44AD', '#F39C12', '#16A085', '#D35400', '#2C3E50'];
 
+// Split text into words while tracking which indices start a new line
+function parseWords(text: string): { words: string[]; lineBreaks: Set<number> } {
+  const lines = text.split('\n');
+  const words: string[] = [];
+  const lineBreaks = new Set<number>();
+  lines.forEach((line, lineIndex) => {
+    if (lineIndex > 0) lineBreaks.add(words.length);
+    const lineWords = line.split(/\s+/).filter(w => w.length > 0);
+    words.push(...lineWords);
+  });
+  return { words, lineBreaks };
+}
+
 export default function BoardScreen({ imageUri, paragraphs, isCached, onExit, onDelete }: Props) {
   const [imageLayout, setImageLayout] = useState<{ width: number; height: number } | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(null);
@@ -29,6 +42,7 @@ export default function BoardScreen({ imageUri, paragraphs, isCached, onExit, on
   const [currentWordIndex, setCurrentWordIndex] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
   const [words, setWords] = useState<string[]>([]);
+  const [lineBreaks, setLineBreaks] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     return () => { Speech.stop(); };
@@ -59,8 +73,9 @@ export default function BoardScreen({ imageUri, paragraphs, isCached, onExit, on
 
   const startReading = useCallback((p: Paragraph) => {
     Speech.stop();
-    const wordList = p.text.split(/\s+/).filter(w => w.length > 0);
+    const { words: wordList, lineBreaks: breaks } = parseWords(p.text);
     setWords(wordList);
+    setLineBreaks(breaks);
     setActiveParagraph(p);
     setCurrentWordIndex(0);
     setIsPlaying(true);
@@ -91,14 +106,21 @@ export default function BoardScreen({ imageUri, paragraphs, isCached, onExit, on
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
+      {/* Header — יציאה on right, status in middle, צא on left */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => { stopReading(); onExit(); }}>
-          <Text style={styles.backText}>← יציאה</Text>
+        <TouchableOpacity onPress={() => { stopReading(); onDelete(); }}>
+          <Text style={styles.deleteText}>
+            {isCached ? '🗑 מחק' : '✕ צא'}
+          </Text>
         </TouchableOpacity>
+
         <Text style={styles.hint}>
           {isPlaying ? '⏸ מקריא...' : 'בחר קטע לקריאה'}
         </Text>
+
+        <TouchableOpacity onPress={() => { stopReading(); onExit(); }}>
+          <Text style={styles.backText}>← יציאה</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Image with boxes */}
@@ -136,39 +158,33 @@ export default function BoardScreen({ imageUri, paragraphs, isCached, onExit, on
         })}
       </View>
 
-      {/* Bottom panel */}
-      <View style={styles.bottomPanel}>
-        {activeParagraph && (
-          <>
-            <ScrollView style={styles.wordScroll} showsVerticalScrollIndicator={false}>
-              <Text style={styles.wordLine}>
-                {words.map((word, i) => (
-                  <Text
-                    key={i}
-                    style={[styles.word, i === currentWordIndex && styles.activeWord]}
-                  >
-                    {i > 0 ? ' ' : ''}{word}
+      {/* Bottom panel — text + play/stop button */}
+      {activeParagraph && (
+        <View style={styles.bottomPanel}>
+          <ScrollView
+            style={styles.wordScroll}
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.wordLine}>
+              {words.map((word, i) => (
+                <Text key={i}>
+                  {lineBreaks.has(i) ? '\n' : (i > 0 ? ' ' : '')}
+                  <Text style={[styles.word, i === currentWordIndex && styles.activeWord]}>
+                    {word}
                   </Text>
-                ))}
-              </Text>
-            </ScrollView>
-            <TouchableOpacity
-              style={[styles.controlBtn, isPlaying ? styles.pauseBtn : styles.playBtn]}
-              onPress={() => isPlaying ? stopReading() : startReading(activeParagraph)}
-            >
-              <Text style={styles.controlBtnText}>{isPlaying ? '⏸ עצור' : '▶ המשך'}</Text>
-            </TouchableOpacity>
-          </>
-        )}
-        <TouchableOpacity
-          style={styles.deleteBtn}
-          onPress={() => { stopReading(); onDelete(); }}
-        >
-          <Text style={styles.deleteBtnText}>
-            {isCached ? '🗑  מחק מהאחרונים' : '✕  צא ללא שמירה'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+                </Text>
+              ))}
+            </Text>
+          </ScrollView>
+
+          <TouchableOpacity
+            style={[styles.controlBtn, isPlaying ? styles.pauseBtn : styles.playBtn]}
+            onPress={() => isPlaying ? stopReading() : startReading(activeParagraph)}
+          >
+            <Text style={styles.controlBtnText}>{isPlaying ? '⏸ עצור' : '▶ המשך'}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -176,15 +192,17 @@ export default function BoardScreen({ imageUri, paragraphs, isCached, onExit, on
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000000' },
   header: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     backgroundColor: '#000000',
   },
   backText: { fontSize: 17, color: '#007AFF', fontWeight: '600' },
-  hint: { fontSize: 15, color: 'rgba(255,255,255,0.7)', fontWeight: '500' },
+  hint: { fontSize: 13, color: 'rgba(255,255,255,0.6)', fontWeight: '500' },
+  deleteText: { fontSize: 15, color: '#FF453A', fontWeight: '600' },
+
   imageWrapper: { flex: 1, position: 'relative', backgroundColor: '#111' },
   image: { width: '100%', height: '100%' },
   box: {
@@ -211,51 +229,39 @@ const styles = StyleSheet.create({
 
   bottomPanel: {
     backgroundColor: '#1C1C1E',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 20,
-    gap: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 16,
+    gap: 10,
+    maxHeight: '45%',
   },
-  wordScroll: { maxHeight: 100 },
+  wordScroll: { flexGrow: 0 },
   wordLine: {
-    fontSize: 24,
-    lineHeight: 38,
+    fontSize: 18,
+    lineHeight: 28,
     color: '#FFFFFF',
     textAlign: 'right',
     writingDirection: 'rtl',
   },
   word: {
-    fontSize: 24,
-    lineHeight: 38,
+    fontSize: 18,
+    lineHeight: 28,
     color: '#EBEBF5',
   },
   activeWord: {
     backgroundColor: '#FFD60A',
-    borderRadius: 6,
+    borderRadius: 5,
     fontWeight: '700',
     color: '#000000',
   },
   controlBtn: {
     borderRadius: 14,
-    paddingVertical: 10,
+    paddingVertical: 9,
     alignItems: 'center',
   },
   playBtn: { backgroundColor: '#4A90E2' },
   pauseBtn: { backgroundColor: '#E74C3C' },
-  controlBtnText: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
-  deleteBtn: {
-    borderRadius: 12,
-    paddingVertical: 10,
-    alignItems: 'center',
-    backgroundColor: '#1C1C1E',
-    borderWidth: 1,
-    borderColor: '#3A3A3C',
-  },
-  deleteBtnText: { color: '#FF453A', fontSize: 16, fontWeight: '600' },
+  controlBtnText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
 });
