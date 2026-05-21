@@ -14,47 +14,66 @@ export interface Paragraph {
   box: BoundingBox;
 }
 
+const RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    imageWidth:  { type: 'number', description: 'Total width of the image in pixels as you see it' },
+    imageHeight: { type: 'number', description: 'Total height of the image in pixels as you see it' },
+    paragraphs: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          text: { type: 'string' },
+          boundingBox: {
+            type: 'object',
+            properties: {
+              top:    { type: 'number', description: 'Top edge in pixels' },
+              left:   { type: 'number', description: 'Left edge in pixels' },
+              width:  { type: 'number', description: 'Width in pixels' },
+              height: { type: 'number', description: 'Height in pixels' },
+            },
+            required: ['top', 'left', 'width', 'height'],
+          },
+        },
+        required: ['text', 'boundingBox'],
+      },
+    },
+  },
+  required: ['imageWidth', 'imageHeight', 'paragraphs'],
+};
+
 export async function extractParagraphs(base64: string): Promise<Paragraph[]> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
-  const prompt = `אתה מומחה לקריאת כתב יד בעברית מלוחות כיתה. זו משימת קריאה קריטית עבור ילד עם דיסלקציה.
-
-הקשר: לוח של כיתת יסודי/חטיבה. המילים השכיחות ביותר:
-מבחן, שיעורי בית, דף עבודה, להגשה, ציון, נושא, שטח, היקף, חשבון, אנגלית, עברית, מדעים, היסטוריה, תנ״ך, יום שני/שלישי/רביעי/חמישי/שישי, לא למחוק, לג׳, חופש, מחר, השבוע.
-
-זהה את כל בלוקי הטקסט בתמונה. לכל בלוק — קרא בעיון, שים לב לדמיון בין אותיות: ב/כ, ד/ר, ה/ח/ת, מ/ס.
-
-החזר JSON בלבד (ללא markdown, ללא קוד בקשים):
-{
-  "paragraphs": [
-    {
-      "text": "הטקסט המדויק",
-      "box": { "x": 0.05, "y": 0.10, "width": 0.90, "height": 0.20 }
-    }
-  ]
-}
-
-כללי box (0.0–1.0 יחסית לתמונה): x,y = פינה שמאלית-עליונה, width/height = גודל הבלוק.
-חשוב: x+width ≤ 1.0 ו-y+height ≤ 1.0 תמיד.`;
+  const systemInstruction = `Analyze the image. Find all text and divide it into logical paragraphs.
+Rules:
+- A heading + all lines under it = ONE paragraph (not separate paragraphs per line)
+- A schedule/list with dates = ONE paragraph containing all dates and descriptions
+- Goal: 2 to 4 large paragraphs, never more than 5
+- Extract text in the original language (Hebrew/English as written)
+- Return bounding box coordinates in PIXELS as you see the image
+- Also return imageWidth and imageHeight — the total pixel dimensions of the image as you see it`;
 
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      systemInstruction: { parts: [{ text: systemInstruction }] },
       contents: [
         {
           parts: [
             { inline_data: { mime_type: 'image/jpeg', data: base64 } },
-            { text: prompt },
+            { text: 'Divide this image into logical text paragraphs. Return pixel coordinates and the image dimensions you see.' },
           ],
         },
       ],
       generationConfig: {
         temperature: 0.1,
         maxOutputTokens: 8192,
-        thinkingConfig: {
-          thinkingBudget: 0,
-        },
+        responseMimeType: 'application/json',
+        responseSchema: RESPONSE_SCHEMA,
+        thinkingConfig: { thinkingBudget: 0 },
       },
     }),
   });
@@ -62,23 +81,30 @@ export async function extractParagraphs(base64: string): Promise<Paragraph[]> {
   if (!response.ok) throw new Error(`Gemini API error: ${await response.text()}`);
 
   const data = await response.json();
-  // 2.5-flash is a thinking model — find the non-thought part
   const parts = data.candidates?.[0]?.content?.parts || [];
   const content = parts.find((p: any) => !p.thought)?.text ?? parts[0]?.text;
   if (!content) throw new Error('Empty response from Gemini');
 
-  // Strip markdown code fences if present
-  const cleaned = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error('Could not parse response from Gemini');
+  const parsed = JSON.parse(content);
 
-  const parsed = JSON.parse(jsonMatch[0]);
+  const imgW = parsed.imageWidth  || 1;
+  const imgH = parsed.imageHeight || 1;
+
+  console.log('=== GEMINI RAW JSON ===');
+  console.log(JSON.stringify(parsed, null, 2));
+  console.log(`=== Normalizing by ${imgW}x${imgH} ===`);
+
   return (parsed.paragraphs || [])
-    .map((item: { text: string; box: BoundingBox }, index: number) => ({
+    .map((item: any, index: number) => ({
       id: `p-${index}`,
       text: item.text?.trim() || '',
       index,
-      box: item.box || { x: 0.05, y: index * 0.2, width: 0.9, height: 0.18 },
+      box: {
+        x:      (item.boundingBox?.left   ?? 0)  / imgW,
+        y:      (item.boundingBox?.top    ?? 0)  / imgH,
+        width:  (item.boundingBox?.width  ?? imgW) / imgW,
+        height: (item.boundingBox?.height ?? imgH) / imgH,
+      },
     }))
     .filter((p: Paragraph) => p.text.length > 0);
 }

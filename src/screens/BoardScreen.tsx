@@ -6,9 +6,8 @@ import {
   StyleSheet,
   Text,
   SafeAreaView,
+  LayoutChangeEvent,
   ScrollView,
-  FlatList,
-  Dimensions,
 } from 'react-native';
 import * as Speech from 'expo-speech';
 import { Paragraph } from '../services/claude';
@@ -22,10 +21,10 @@ interface Props {
 }
 
 const COLORS = ['#E74C3C', '#2980B9', '#27AE60', '#8E44AD', '#F39C12', '#16A085', '#D35400', '#2C3E50'];
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const IMAGE_HEIGHT = SCREEN_HEIGHT * 0.38;
 
 export default function BoardScreen({ imageUri, paragraphs, isCached, onExit, onDelete }: Props) {
+  const [imageLayout, setImageLayout] = useState<{ width: number; height: number } | null>(null);
+  const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(null);
   const [activeParagraph, setActiveParagraph] = useState<Paragraph | null>(null);
   const [currentWordIndex, setCurrentWordIndex] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -34,6 +33,29 @@ export default function BoardScreen({ imageUri, paragraphs, isCached, onExit, on
   useEffect(() => {
     return () => { Speech.stop(); };
   }, []);
+
+  const onImageLoad = (e: any) => {
+    setNaturalSize({ width: e.nativeEvent.source.width, height: e.nativeEvent.source.height });
+  };
+
+  const onContainerLayout = (e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    setImageLayout({ width, height });
+  };
+
+  const getRenderedRect = () => {
+    if (!imageLayout || !naturalSize) return null;
+    const { width: cW, height: cH } = imageLayout;
+    const imgAspect = naturalSize.width / naturalSize.height;
+    const containerAspect = cW / cH;
+    let rW: number, rH: number, oX: number, oY: number;
+    if (imgAspect > containerAspect) {
+      rW = cW; rH = cW / imgAspect; oX = 0; oY = (cH - rH) / 2;
+    } else {
+      rH = cH; rW = cH * imgAspect; oX = (cW - rW) / 2; oY = 0;
+    }
+    return { rW, rH, oX, oY };
+  };
 
   const startReading = useCallback((p: Paragraph) => {
     Speech.stop();
@@ -65,13 +87,7 @@ export default function BoardScreen({ imageUri, paragraphs, isCached, onExit, on
     setCurrentWordIndex(-1);
   };
 
-  const handleParagraphPress = (p: Paragraph) => {
-    if (activeParagraph?.id === p.id && isPlaying) {
-      stopReading();
-    } else {
-      startReading(p);
-    }
-  };
+  const rendered = getRenderedRect();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -85,74 +101,74 @@ export default function BoardScreen({ imageUri, paragraphs, isCached, onExit, on
         </Text>
       </View>
 
-      {/* Image */}
-      <View style={styles.imageWrapper}>
+      {/* Image with boxes */}
+      <View style={styles.imageWrapper} onLayout={onContainerLayout}>
         <Image
           source={{ uri: imageUri }}
           style={styles.image}
           resizeMode="contain"
+          onLoad={onImageLoad}
         />
-      </View>
-
-      {/* Word highlight strip — shown when playing */}
-      {activeParagraph && (
-        <View style={styles.wordStrip}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.wordScrollContent}
-          >
-            <Text style={styles.wordLine}>
-              {words.map((word, i) => (
-                <Text
-                  key={i}
-                  style={[styles.word, i === currentWordIndex && styles.activeWord]}
-                >
-                  {i > 0 ? ' ' : ''}{word}
-                </Text>
-              ))}
-            </Text>
-          </ScrollView>
-        </View>
-      )}
-
-      {/* Paragraph list */}
-      <FlatList
-        data={paragraphs}
-        keyExtractor={p => p.id}
-        style={styles.list}
-        contentContainerStyle={styles.listContent}
-        renderItem={({ item: p, index: i }) => {
+        {rendered && paragraphs.map((p, i) => {
           const color = COLORS[i % COLORS.length];
           const isActive = activeParagraph?.id === p.id;
+          const left = rendered.oX + p.box.x * rendered.rW;
+          const top = rendered.oY + p.box.y * rendered.rH;
+          const width = p.box.width * rendered.rW;
+          const height = p.box.height * rendered.rH;
+
           return (
             <TouchableOpacity
-              style={[styles.paragraphRow, isActive && { borderColor: color, borderWidth: 2 }]}
-              onPress={() => handleParagraphPress(p)}
-              activeOpacity={0.7}
+              key={p.id}
+              style={[
+                styles.box,
+                { left, top, width, height, borderColor: color },
+                isActive && { backgroundColor: `${color}33`, borderWidth: 3 },
+              ]}
+              onPress={() => isActive && isPlaying ? stopReading() : startReading(p)}
+              activeOpacity={0.6}
             >
-              <View style={[styles.numberBadge, { backgroundColor: color }]}>
-                <Text style={styles.numberText}>
-                  {isActive && isPlaying ? '⏸' : i + 1}
-                </Text>
+              <View style={[styles.badge, { backgroundColor: color }]}>
+                <Text style={styles.badgeText}>{isActive && isPlaying ? '⏸' : i + 1}</Text>
               </View>
-              <Text style={styles.paragraphText} numberOfLines={isActive ? 0 : 2}>
-                {p.text}
-              </Text>
             </TouchableOpacity>
           );
-        }}
-        ListFooterComponent={
-          <TouchableOpacity
-            style={styles.deleteBtn}
-            onPress={() => { stopReading(); onDelete(); }}
-          >
-            <Text style={styles.deleteBtnText}>
-              {isCached ? '🗑  מחק מהאחרונים' : '✕  צא ללא שמירה'}
-            </Text>
-          </TouchableOpacity>
-        }
-      />
+        })}
+      </View>
+
+      {/* Bottom panel */}
+      <View style={styles.bottomPanel}>
+        {activeParagraph && (
+          <>
+            <ScrollView style={styles.wordScroll} showsVerticalScrollIndicator={false}>
+              <Text style={styles.wordLine}>
+                {words.map((word, i) => (
+                  <Text
+                    key={i}
+                    style={[styles.word, i === currentWordIndex && styles.activeWord]}
+                  >
+                    {i > 0 ? ' ' : ''}{word}
+                  </Text>
+                ))}
+              </Text>
+            </ScrollView>
+            <TouchableOpacity
+              style={[styles.controlBtn, isPlaying ? styles.pauseBtn : styles.playBtn]}
+              onPress={() => isPlaying ? stopReading() : startReading(activeParagraph)}
+            >
+              <Text style={styles.controlBtnText}>{isPlaying ? '⏸ עצור' : '▶ המשך'}</Text>
+            </TouchableOpacity>
+          </>
+        )}
+        <TouchableOpacity
+          style={styles.deleteBtn}
+          onPress={() => { stopReading(); onDelete(); }}
+        >
+          <Text style={styles.deleteBtnText}>
+            {isCached ? '🗑  מחק מהאחרונים' : '✕  צא ללא שמירה'}
+          </Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
@@ -164,71 +180,78 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingVertical: 12,
+    backgroundColor: '#000000',
   },
   backText: { fontSize: 17, color: '#007AFF', fontWeight: '600' },
-  hint: { fontSize: 14, color: 'rgba(255,255,255,0.6)' },
-
-  imageWrapper: {
-    height: IMAGE_HEIGHT,
-    backgroundColor: '#111',
-  },
+  hint: { fontSize: 15, color: 'rgba(255,255,255,0.7)', fontWeight: '500' },
+  imageWrapper: { flex: 1, position: 'relative', backgroundColor: '#111' },
   image: { width: '100%', height: '100%' },
-
-  wordStrip: {
-    backgroundColor: '#1C1C1E',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
+  box: {
+    position: 'absolute',
+    borderWidth: 2.5,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.04)',
   },
-  wordScrollContent: { flexDirection: 'row-reverse', alignItems: 'center' },
-  wordLine: { writingDirection: 'rtl' },
-  word: { fontSize: 20, color: '#EBEBF5', lineHeight: 30 },
-  activeWord: {
-    backgroundColor: '#FFD60A',
-    borderRadius: 5,
-    fontWeight: '700',
-    color: '#000',
-  },
-
-  list: { flex: 1 },
-  listContent: { padding: 12, gap: 8 },
-
-  paragraphRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'flex-start',
-    backgroundColor: '#1C1C1E',
+  badge: {
+    position: 'absolute',
+    top: -13,
+    right: -13,
+    width: 28,
+    height: 28,
     borderRadius: 14,
-    padding: 12,
-    gap: 10,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  numberBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
-    marginTop: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
   },
-  numberText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
-  paragraphText: {
-    flex: 1,
-    fontSize: 18,
+  badgeText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
+
+  bottomPanel: {
+    backgroundColor: '#1C1C1E',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 20,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+  },
+  wordScroll: { maxHeight: 100 },
+  wordLine: {
+    fontSize: 24,
+    lineHeight: 38,
     color: '#FFFFFF',
     textAlign: 'right',
     writingDirection: 'rtl',
-    lineHeight: 28,
   },
-
+  word: {
+    fontSize: 24,
+    lineHeight: 38,
+    color: '#EBEBF5',
+  },
+  activeWord: {
+    backgroundColor: '#FFD60A',
+    borderRadius: 6,
+    fontWeight: '700',
+    color: '#000000',
+  },
+  controlBtn: {
+    borderRadius: 14,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  playBtn: { backgroundColor: '#4A90E2' },
+  pauseBtn: { backgroundColor: '#E74C3C' },
+  controlBtnText: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
   deleteBtn: {
-    marginTop: 8,
-    marginBottom: 8,
     borderRadius: 12,
-    paddingVertical: 12,
+    paddingVertical: 10,
     alignItems: 'center',
     backgroundColor: '#1C1C1E',
     borderWidth: 1,
