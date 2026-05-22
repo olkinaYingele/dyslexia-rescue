@@ -275,10 +275,10 @@ const styles = StyleSheet.create({
     color: '#181C20',
   },
   activeWord: {
-    backgroundColor: '#FFD60A',
+    backgroundColor: '#EFDBFF',
     borderRadius: 4,
     fontWeight: '700',
-    color: '#000000',
+    color: '#504061',
   },
   playBtn: {
     width: 52,
