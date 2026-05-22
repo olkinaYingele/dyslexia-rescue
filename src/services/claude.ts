@@ -78,15 +78,21 @@ CRITICAL RULES — follow exactly:
     },
   });
 
-  // Retry up to 3 times on 503 (server overload)
+  // Retry up to 5 times on 503 (server overload), with increasing delays
   let response: Response | null = null;
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  for (let attempt = 1; attempt <= 5; attempt++) {
     response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
     if (response.ok || response.status !== 503) break;
-    if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 2000));
+    if (attempt < 5) await new Promise(r => setTimeout(r, attempt * 3000)); // 3s, 6s, 9s, 12s
   }
 
-  if (!response!.ok) throw new Error(`Gemini API error: ${await response!.text()}`);
+  if (!response!.ok) {
+    const errText = await response!.text();
+    if (response!.status === 503) {
+      throw new Error('השרת עמוס כרגע. נסה שוב בעוד דקה.');
+    }
+    throw new Error(`Gemini API error: ${errText}`);
+  }
 
   const data = await response!.json();
   const parts = data.candidates?.[0]?.content?.parts || [];
