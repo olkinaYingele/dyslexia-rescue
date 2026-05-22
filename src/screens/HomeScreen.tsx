@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Alert,
-  SafeAreaView, FlatList, Image, Dimensions, Platform,
+  SafeAreaView, FlatList, Image, Dimensions,
 } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { LinearGradient } from 'expo-linear-gradient';
 import { extractParagraphs, Paragraph } from '../services/claude';
 import { saveToCache, loadCache, deleteFromCache, CachedScreen } from '../services/cache';
 import ProgressLoader from '../components/ProgressLoader';
 
 const { width } = Dimensions.get('window');
-const THUMB_SIZE = (width - 48) / 3;
+const THUMB_SIZE = (width - 48) / 2;
 
 interface Props {
   onParagraphsReady: (paragraphs: Paragraph[], imageUri: string, language: string, cacheId?: string, originalUri?: string) => void;
@@ -89,9 +89,9 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
     ]);
   };
 
-  const formatTime = (ts: number) => {
+  const formatDate = (ts: number) => {
     const d = new Date(ts);
-    return d.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' });
+    return d.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric', year: '2-digit' });
   };
 
   if (loading) {
@@ -106,64 +106,48 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.appName}>קורא</Text>
-        <Text style={styles.appSubtitle}>צלם • קרא • הבן</Text>
+        <Text style={styles.title}>קורא</Text>
+        <Text style={styles.subtitle}>צלם • האזן • הבן</Text>
       </View>
 
-      {/* Main action buttons */}
-      <View style={styles.actions}>
-        {/* Camera — big primary button */}
-        <TouchableOpacity style={styles.cameraBtn} onPress={takePhoto} activeOpacity={0.85}>
-          <LinearGradient
-            colors={['#007AFF', '#0051D4']}
-            style={styles.cameraBtnInner}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <Text style={styles.cameraIcon}>📷</Text>
-            <Text style={styles.cameraBtnText}>צלם לוח</Text>
-            <Text style={styles.cameraBtnSub}>פתח מצלמה</Text>
-          </LinearGradient>
+      {/* Action buttons */}
+      <View style={styles.buttons}>
+        <TouchableOpacity style={styles.btn} onPress={takePhoto} activeOpacity={0.85}>
+          <Feather name="camera" size={20} color="#FFFFFF" />
+          <Text style={styles.btnText}>מצלמה</Text>
         </TouchableOpacity>
-
-        {/* Gallery picker — secondary */}
-        <TouchableOpacity style={styles.galleryBtn} onPress={pickFromGallery} activeOpacity={0.85}>
-          <Text style={styles.galleryIcon}>🖼</Text>
-          <View>
-            <Text style={styles.galleryBtnText}>בחר תמונה</Text>
-            <Text style={styles.galleryBtnSub}>מהגלריה</Text>
-          </View>
+        <TouchableOpacity style={styles.btn} onPress={pickFromGallery} activeOpacity={0.85}>
+          <Feather name="image" size={20} color="#FFFFFF" />
+          <Text style={styles.btnText}>גלריה</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Recent — grid like iOS Photos */}
+      {/* Recent grid */}
       {recent.length > 0 && (
         <View style={styles.recentSection}>
           <Text style={styles.recentTitle}>אחרונים</Text>
           <FlatList
             data={recent}
-            numColumns={3}
+            numColumns={2}
             keyExtractor={i => i.id}
-            scrollEnabled={false}
+            scrollEnabled={true}
             columnWrapperStyle={styles.gridRow}
             renderItem={({ item }) => (
               <TouchableOpacity
                 style={styles.gridItem}
                 onPress={() => openCached(item)}
-                onLongPress={() => handleDelete(item)}
-                activeOpacity={0.8}
+                activeOpacity={0.85}
               >
                 <Image
                   source={{ uri: `data:image/jpeg;base64,${item.thumbBase64}` }}
                   style={styles.gridThumb}
                 />
                 <View style={styles.gridOverlay}>
-                  <Text style={styles.gridDate}>{formatTime(item.timestamp)}</Text>
+                  <Text style={styles.gridDate}>{formatDate(item.timestamp)}</Text>
                 </View>
               </TouchableOpacity>
             )}
           />
-          <Text style={styles.longPressHint}>לחץ לחיצה ארוכה למחיקה</Text>
         </View>
       )}
     </SafeAreaView>
@@ -173,111 +157,91 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#F7F9FF',
   },
   loadingScreen: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#F7F9FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
+
+  // Header
   header: {
     paddingHorizontal: 24,
-    paddingTop: 16,
+    paddingTop: 20,
     paddingBottom: 8,
+    alignItems: 'flex-end',
   },
-  appName: {
-    fontSize: 34,
-    fontWeight: '700',
-    color: '#1C1C1E',
-    letterSpacing: -0.5,
+  title: {
+    fontSize: 40,
+    fontFamily: 'Fredoka-Bold',
+    color: '#181C20',
+    lineHeight: 44,
   },
-  appSubtitle: {
-    fontSize: 15,
-    color: '#8E8E93',
+  subtitle: {
+    fontSize: 14,
+    fontFamily: 'Fredoka-Regular',
+    color: '#72777F',
     marginTop: 2,
   },
 
-  // Actions
-  actions: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+  // Buttons
+  buttons: {
+    flexDirection: 'row',
+    marginHorizontal: 24,
+    marginTop: 20,
+    marginBottom: 24,
     gap: 12,
   },
-  cameraBtn: {
-    borderRadius: 20,
-    overflow: 'hidden',
-    shadowColor: '#007AFF',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  cameraBtnInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 22,
-    paddingHorizontal: 24,
-    gap: 16,
-  },
-  cameraIcon: { fontSize: 40 },
-  cameraBtnText: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#FFFFFF',
+  btn: {
     flex: 1,
-  },
-  cameraBtnSub: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.7)',
-  },
-  galleryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    justifyContent: 'center',
+    backgroundColor: '#2F628C',
+    borderRadius: 16,
     paddingVertical: 16,
-    paddingHorizontal: 24,
-    gap: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
+    gap: 8,
+    shadowColor: '#2F628C',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
     shadowRadius: 8,
-    elevation: 2,
+    elevation: 4,
   },
-  galleryIcon: { fontSize: 32 },
-  galleryBtnText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1C1C1E',
-  },
-  galleryBtnSub: {
-    fontSize: 13,
-    color: '#8E8E93',
-    marginTop: 1,
+  btnText: {
+    fontSize: 16,
+    fontFamily: 'Fredoka-Medium',
+    color: '#FFFFFF',
   },
 
-  // Recent grid
+  // Recent
   recentSection: {
     flex: 1,
     paddingHorizontal: 16,
   },
   recentTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#1C1C1E',
+    fontSize: 20,
+    fontFamily: 'Fredoka-SemiBold',
+    color: '#181C20',
+    textAlign: 'right',
     marginBottom: 12,
+    paddingHorizontal: 8,
   },
   gridRow: {
-    gap: 3,
-    marginBottom: 3,
+    gap: 8,
+    marginBottom: 8,
   },
   gridItem: {
     width: THUMB_SIZE,
-    height: THUMB_SIZE,
-    borderRadius: 8,
+    height: THUMB_SIZE * 1.1,
+    borderRadius: 16,
     overflow: 'hidden',
-    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
   gridThumb: {
     width: '100%',
@@ -288,19 +252,21 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    paddingVertical: 3,
-    paddingHorizontal: 6,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
   },
   gridDate: {
     color: '#FFFFFF',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '500',
+    textAlign: 'right',
   },
-  longPressHint: {
+  hint: {
     textAlign: 'center',
     fontSize: 12,
     color: '#C7C7CC',
-    marginTop: 10,
+    marginTop: 8,
+    marginBottom: 8,
   },
 });

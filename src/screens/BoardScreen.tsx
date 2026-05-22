@@ -10,6 +10,7 @@ import {
   ScrollView,
 } from 'react-native';
 import * as Speech from 'expo-speech';
+import { Feather } from '@expo/vector-icons';
 import { Paragraph } from '../services/claude';
 
 interface Props {
@@ -17,13 +18,14 @@ interface Props {
   paragraphs: Paragraph[];
   language: string;
   isCached: boolean;
+  timestamp?: number;
   onExit: () => void;
   onDelete: () => void;
 }
 
-const COLORS = ['#E74C3C', '#2980B9', '#27AE60', '#8E44AD', '#F39C12', '#16A085', '#D35400', '#2C3E50'];
+// All colors from the Material palette
+const COLORS = ['#2F628C', '#51606F', '#68587A', '#0F4A73', '#3A4857', '#504061', '#245882', '#42474E'];
 
-// Split text into words while tracking which indices start a new line
 function parseWords(text: string): { words: string[]; lineBreaks: Set<number> } {
   const lines = text.split('\n');
   const words: string[] = [];
@@ -36,7 +38,12 @@ function parseWords(text: string): { words: string[]; lineBreaks: Set<number> } 
   return { words, lineBreaks };
 }
 
-export default function BoardScreen({ imageUri, paragraphs, language, isCached, onExit, onDelete }: Props) {
+function formatTimestamp(ts?: number): string {
+  const d = new Date(ts || Date.now());
+  return d.toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+export default function BoardScreen({ imageUri, paragraphs, language, isCached, timestamp, onExit, onDelete }: Props) {
   const [imageLayout, setImageLayout] = useState<{ width: number; height: number } | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(null);
   const [activeParagraph, setActiveParagraph] = useState<Paragraph | null>(null);
@@ -95,7 +102,7 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
         onError: () => { setIsPlaying(false); setCurrentWordIndex(-1); },
       });
     }, 150);
-  }, []);
+  }, [language]);
 
   const stopReading = () => {
     Speech.stop();
@@ -108,22 +115,19 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header — יציאה on right, status in middle, צא on left */}
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => { stopReading(); onDelete(); }}>
-          <Text style={styles.deleteText}>
-            {isCached ? '🗑 מחק' : '✕ צא'}
-          </Text>
+        <TouchableOpacity style={styles.headerBtn} onPress={() => { stopReading(); onExit(); }}>
+          <Feather name="arrow-left" size={22} color="#1C1C1E" />
         </TouchableOpacity>
 
-        <Text style={styles.hint}>
-          {isPlaying ? '⏸ מקריא...' : 'בחר קטע לקריאה'}
-        </Text>
+        <Text style={styles.dateText}>{formatTimestamp(timestamp)}</Text>
 
-        <TouchableOpacity onPress={() => { stopReading(); onExit(); }}>
-          <Text style={styles.backText}>← יציאה</Text>
+        <TouchableOpacity style={styles.headerBtn} onPress={() => { stopReading(); onDelete(); }}>
+          <Feather name="trash-2" size={20} color="#72777F" />
         </TouchableOpacity>
       </View>
+
 
       {/* Image with boxes */}
       <View style={styles.imageWrapper} onLayout={onContainerLayout}>
@@ -147,7 +151,7 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
               style={[
                 styles.box,
                 { left, top, width, height, borderColor: color },
-                isActive && { backgroundColor: `${color}33`, borderWidth: 3 },
+                isActive && { backgroundColor: `${color}22`, borderWidth: 3 },
               ]}
               onPress={() => isActive && isPlaying ? stopReading() : startReading(p)}
               activeOpacity={0.6}
@@ -160,13 +164,10 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
         })}
       </View>
 
-      {/* Bottom panel — text + play/stop button */}
+      {/* Bottom panel */}
       {activeParagraph && (
         <View style={styles.bottomPanel}>
-          <ScrollView
-            style={styles.wordScroll}
-            showsVerticalScrollIndicator={false}
-          >
+          <ScrollView style={styles.wordScroll} showsVerticalScrollIndicator={false}>
             <Text style={[styles.wordLine, isRTL ? styles.textRTL : styles.textLTR]}>
               {words.map((word, i) => (
                 <Text key={i}>
@@ -180,10 +181,10 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
           </ScrollView>
 
           <TouchableOpacity
-            style={[styles.controlBtn, isPlaying ? styles.pauseBtn : styles.playBtn]}
+            style={styles.playBtn}
             onPress={() => isPlaying ? stopReading() : startReading(activeParagraph)}
           >
-            <Text style={styles.controlBtnText}>{isPlaying ? '⏸ עצור' : '▶ המשך'}</Text>
+            <Feather name={isPlaying ? 'pause' : 'play'} size={22} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
       )}
@@ -192,84 +193,97 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000000' },
+  container: { flex: 1, backgroundColor: '#F7F9FF' },
+
+  // Header
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#000000',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: '#F7F9FF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#DEE3EB',
   },
-  backText: { fontSize: 17, color: '#007AFF', fontWeight: '600' },
-  hint: { fontSize: 13, color: 'rgba(255,255,255,0.6)', fontWeight: '500' },
-  deleteText: { fontSize: 15, color: '#FF453A', fontWeight: '600' },
+  headerBtn: {
+    padding: 4,
+  },
+  dateText: {
+    fontSize: 13,
+    fontFamily: 'Fredoka-Regular',
+    color: '#72777F',
+  },
 
-  imageWrapper: { flex: 1, position: 'relative', backgroundColor: '#111' },
+  // Image
+  imageWrapper: { flex: 1, position: 'relative', backgroundColor: '#DEE3EB' },
   image: { width: '100%', height: '100%' },
   box: {
     position: 'absolute',
-    borderWidth: 2.5,
+    borderWidth: 2,
     borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: 'transparent',
   },
   badge: {
     position: 'absolute',
     top: -13,
     right: -13,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+  },
+  badgeText: { color: '#FFF', fontSize: 12, fontWeight: '700' },
+
+  // Bottom panel
+  bottomPanel: {
+    backgroundColor: '#F7F9FF',
+    borderTopWidth: 1,
+    borderTopColor: '#DEE3EB',
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 20,
+    gap: 14,
+    maxHeight: '40%',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  wordScroll: { flex: 1 },
+  wordLine: {
+    fontSize: 18,
+    lineHeight: 28,
+    fontFamily: 'Fredoka-Regular',
+    color: '#181C20',
+  },
+  textRTL: { textAlign: 'right', writingDirection: 'rtl' },
+  textLTR: { textAlign: 'left', writingDirection: 'ltr' },
+  word: {
+    fontSize: 18,
+    lineHeight: 28,
+    fontFamily: 'Fredoka-Regular',
+    color: '#181C20',
+  },
+  activeWord: {
+    backgroundColor: '#FFD60A',
+    borderRadius: 4,
+    fontWeight: '700',
+    color: '#000000',
+  },
+  playBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#2F628C',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
   },
-  badgeText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
-
-  bottomPanel: {
-    backgroundColor: '#1C1C1E',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 16,
-    gap: 10,
-    maxHeight: '45%',
-  },
-  wordScroll: { flexGrow: 0 },
-  wordLine: {
-    fontSize: 18,
-    lineHeight: 28,
-    color: '#FFFFFF',
-  },
-  textRTL: {
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  textLTR: {
-    textAlign: 'left',
-    writingDirection: 'ltr',
-  },
-  word: {
-    fontSize: 18,
-    lineHeight: 28,
-    color: '#EBEBF5',
-  },
-  activeWord: {
-    backgroundColor: '#FFD60A',
-    borderRadius: 5,
-    fontWeight: '700',
-    color: '#000000',
-  },
-  controlBtn: {
-    borderRadius: 14,
-    paddingVertical: 9,
-    alignItems: 'center',
-  },
-  playBtn: { backgroundColor: '#4A90E2' },
-  pauseBtn: { backgroundColor: '#E74C3C' },
-  controlBtnText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
 });
