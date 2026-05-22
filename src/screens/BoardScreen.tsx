@@ -167,7 +167,7 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
       {/* Bottom panel */}
       {activeParagraph && (
         <View style={styles.bottomPanel}>
-          <ScrollView style={styles.wordScroll} showsVerticalScrollIndicator={false}>
+          <ScrollView style={styles.wordBox} showsVerticalScrollIndicator={false}>
             <Text style={[styles.wordLine, isRTL ? styles.textRTL : styles.textLTR]}>
               {words.map((word, i) => (
                 <Text key={i}>
@@ -203,8 +203,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     backgroundColor: '#F7F9FF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#DEE3EB',
   },
   headerBtn: {
     padding: 4,
@@ -216,7 +214,7 @@ const styles = StyleSheet.create({
   },
 
   // Image
-  imageWrapper: { flex: 1, position: 'relative', backgroundColor: '#DEE3EB' },
+  imageWrapper: { flex: 1, position: 'relative', backgroundColor: '#F7F9FF' },
   image: { width: '100%', height: '100%' },
   box: {
     position: 'absolute',
@@ -243,17 +241,25 @@ const styles = StyleSheet.create({
   // Bottom panel
   bottomPanel: {
     backgroundColor: '#F7F9FF',
-    borderTopWidth: 1,
-    borderTopColor: '#DEE3EB',
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 20,
-    gap: 14,
-    maxHeight: '40%',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 24,
+    gap: 12,
+    maxHeight: '42%',
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'stretch',
   },
-  wordScroll: { flex: 1 },
+  wordBox: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: '#C2C7CF',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
+    minHeight: 80,
+  },
+  wordScroll: {},
   wordLine: {
     fontSize: 18,
     lineHeight: 28,
