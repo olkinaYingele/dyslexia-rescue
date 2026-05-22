@@ -17,8 +17,6 @@ export interface Paragraph {
 const RESPONSE_SCHEMA = {
   type: 'object',
   properties: {
-    imageWidth:  { type: 'number', description: 'Total width of the image in pixels as you see it' },
-    imageHeight: { type: 'number', description: 'Total height of the image in pixels as you see it' },
     paragraphs: {
       type: 'array',
       items: {
@@ -28,10 +26,10 @@ const RESPONSE_SCHEMA = {
           boundingBox: {
             type: 'object',
             properties: {
-              top:    { type: 'number', description: 'Top edge in pixels' },
-              left:   { type: 'number', description: 'Left edge in pixels' },
-              width:  { type: 'number', description: 'Width in pixels' },
-              height: { type: 'number', description: 'Height in pixels' },
+              top:    { type: 'number', description: 'Top edge as % of image height (0=top, 100=bottom)' },
+              left:   { type: 'number', description: 'Left edge as % of image width (0=left, 100=right)' },
+              width:  { type: 'number', description: 'Width as % of image width' },
+              height: { type: 'number', description: 'Height as % of image height' },
             },
             required: ['top', 'left', 'width', 'height'],
           },
@@ -40,7 +38,7 @@ const RESPONSE_SCHEMA = {
       },
     },
   },
-  required: ['imageWidth', 'imageHeight', 'paragraphs'],
+  required: ['paragraphs'],
 };
 
 export async function extractParagraphs(base64: string): Promise<Paragraph[]> {
@@ -48,12 +46,15 @@ export async function extractParagraphs(base64: string): Promise<Paragraph[]> {
 
   const systemInstruction = `Analyze the image. Find all text and divide it into logical paragraphs.
 Rules:
-- A heading + all lines under it = ONE paragraph (not separate paragraphs per line)
-- A schedule/list with dates = ONE paragraph containing all dates and descriptions
-- Goal: 2 to 4 large paragraphs, never more than 5
+- A heading + all lines under it = ONE paragraph (not separate lines)
+- A schedule or list with dates = ONE paragraph containing everything
 - Extract text in the original language (Hebrew/English as written)
-- Return bounding box coordinates in PIXELS as you see the image
-- Also return imageWidth and imageHeight — the total pixel dimensions of the image as you see it`;
+- Return bounding box as PERCENTAGES (0–100) from the top-left corner of the image:
+  - left: 0 = left edge, 100 = right edge
+  - top: 0 = top edge, 100 = bottom edge
+  - width and height are also percentages of the total image dimensions
+  - Example: top-left quarter = { top: 0, left: 0, width: 50, height: 50 }
+  - Example: full image = { top: 0, left: 0, width: 100, height: 100 }`;
 
   const response = await fetch(url, {
     method: 'POST',
@@ -64,7 +65,7 @@ Rules:
         {
           parts: [
             { inline_data: { mime_type: 'image/jpeg', data: base64 } },
-            { text: 'Divide this image into logical text paragraphs. Return pixel coordinates and the image dimensions you see.' },
+            { text: 'Divide this image into logical text paragraphs. Return bounding boxes as percentages (0–100) from the top-left corner.' },
           ],
         },
       ],
@@ -86,24 +87,22 @@ Rules:
   if (!content) throw new Error('Empty response from Gemini');
 
   const parsed = JSON.parse(content);
-
-  const imgW = parsed.imageWidth  || 1;
-  const imgH = parsed.imageHeight || 1;
+  const boxes = parsed.paragraphs || [];
 
   console.log('=== GEMINI RAW JSON ===');
   console.log(JSON.stringify(parsed, null, 2));
-  console.log(`=== Normalizing by ${imgW}x${imgH} ===`);
 
-  return (parsed.paragraphs || [])
+  return (boxes as any[])
     .map((item: any, index: number) => ({
       id: `p-${index}`,
       text: item.text?.trim() || '',
       index,
+      // Gemini returns all coordinates in 0–1000 scale
       box: {
-        x:      (item.boundingBox?.left   ?? 0)  / imgW,
-        y:      (item.boundingBox?.top    ?? 0)  / imgH,
-        width:  (item.boundingBox?.width  ?? imgW) / imgW,
-        height: (item.boundingBox?.height ?? imgH) / imgH,
+        x:      (item.boundingBox?.left   ?? 0) / 1000,
+        y:      (item.boundingBox?.top    ?? 0) / 1000,
+        width:  (item.boundingBox?.width  ?? 0) / 1000,
+        height: (item.boundingBox?.height ?? 0) / 1000,
       },
     }))
     .filter((p: Paragraph) => p.text.length > 0);

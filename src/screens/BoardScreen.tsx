@@ -137,7 +137,7 @@ export default function BoardScreen({ imageUri, paragraphs, isCached, onExit, on
           const left = rendered.oX + p.box.x * rendered.rW;
           const top = rendered.oY + p.box.y * rendered.rH;
           const width = p.box.width * rendered.rW;
-          const height = p.box.height * rendered.rH;
+          const height = Math.max(p.box.height * rendered.rH, 44);
 
           return (
             <TouchableOpacity
