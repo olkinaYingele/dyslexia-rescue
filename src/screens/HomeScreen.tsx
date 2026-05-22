@@ -91,7 +91,9 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
 
   const formatDate = (ts: number) => {
     const d = new Date(ts);
-    return d.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric', year: '2-digit' });
+    const date = d.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric', year: '2-digit' });
+    const time = d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+    return `${date}  ${time}`;
   };
 
   if (loading) {
@@ -142,7 +144,7 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
                   source={{ uri: `data:image/jpeg;base64,${item.thumbBase64}` }}
                   style={styles.gridThumb}
                 />
-                <View style={styles.gridOverlay}>
+                <View style={styles.gridFooter}>
                   <Text style={styles.gridDate}>{formatDate(item.timestamp)}</Text>
                 </View>
               </TouchableOpacity>
@@ -234,33 +236,31 @@ const styles = StyleSheet.create({
   },
   gridItem: {
     width: THUMB_SIZE,
-    height: THUMB_SIZE * 1.1,
     borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: '#000',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#DEE3EB',
+    shadowColor: '#2F628C',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.10,
     shadowRadius: 8,
     elevation: 3,
   },
   gridThumb: {
     width: '100%',
-    height: '100%',
+    height: THUMB_SIZE,
   },
-  gridOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    paddingVertical: 6,
+  gridFooter: {
+    backgroundColor: '#EAF1FC',
+    paddingVertical: 8,
     paddingHorizontal: 10,
   },
   gridDate: {
-    color: '#FFFFFF',
+    color: '#51606F',
     fontSize: 12,
-    fontWeight: '500',
-    textAlign: 'right',
+    fontFamily: 'Fredoka-Regular',
+    textAlign: 'center',
   },
   hint: {
     textAlign: 'center',
