@@ -11,14 +11,16 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>('home');
   const [paragraphs, setParagraphs] = useState<Paragraph[]>([]);
   const [imageUri, setImageUri] = useState('');
+  const [language, setLanguage] = useState('he');
   const [currentCacheId, setCurrentCacheId] = useState<string | null>(null);
   const [unsavedUri, setUnsavedUri] = useState<string | null>(null); // new scan not yet saved
 
   const handleParagraphsReady = (
-    p: Paragraph[], uri: string, cacheId?: string, originalUri?: string
+    p: Paragraph[], uri: string, lang: string, cacheId?: string, originalUri?: string
   ) => {
     setParagraphs(p);
     setImageUri(uri);
+    setLanguage(lang);
     setCurrentCacheId(cacheId || null);
     setUnsavedUri(originalUri || null);
     setScreen('board');
@@ -50,6 +52,7 @@ export default function App() {
         <BoardScreen
           imageUri={imageUri}
           paragraphs={paragraphs}
+          language={language}
           isCached={!!currentCacheId}
           onExit={handleExit}
           onDelete={handleDelete}

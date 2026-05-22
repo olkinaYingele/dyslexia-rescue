@@ -17,19 +17,26 @@ export interface Paragraph {
 const RESPONSE_SCHEMA = {
   type: 'object',
   properties: {
+    documentLanguage: {
+      type: 'string',
+      description: "ISO 639-1 code of the primary language in the image (e.g. 'he', 'en', 'ru', 'ar')",
+    },
     paragraphs: {
       type: 'array',
       items: {
         type: 'object',
         properties: {
-          text: { type: 'string' },
+          text: {
+            type: 'string',
+            description: 'The EXACT literal text of the paragraph, word for word, exactly as it appears. Do not change, summarize, or fix anything.',
+          },
           boundingBox: {
             type: 'object',
             properties: {
-              top:    { type: 'number', description: 'Top edge as % of image height (0=top, 100=bottom)' },
-              left:   { type: 'number', description: 'Left edge as % of image width (0=left, 100=right)' },
-              width:  { type: 'number', description: 'Width as % of image width' },
-              height: { type: 'number', description: 'Height as % of image height' },
+              top:    { type: 'number' },
+              left:   { type: 'number' },
+              width:  { type: 'number' },
+              height: { type: 'number' },
             },
             required: ['top', 'left', 'width', 'height'],
           },
@@ -38,23 +45,19 @@ const RESPONSE_SCHEMA = {
       },
     },
   },
-  required: ['paragraphs'],
+  required: ['documentLanguage', 'paragraphs'],
 };
 
-export async function extractParagraphs(base64: string): Promise<Paragraph[]> {
+export async function extractParagraphs(base64: string): Promise<{ paragraphs: Paragraph[]; language: string }> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
-  const systemInstruction = `Analyze the image. Find all text and divide it into logical paragraphs.
-Rules:
-- A heading + all lines under it = ONE paragraph (not separate lines)
-- A schedule or list with dates = ONE paragraph containing everything
-- Extract text in the original language (Hebrew/English as written)
-- Return bounding box as PERCENTAGES (0–100) from the top-left corner of the image:
-  - left: 0 = left edge, 100 = right edge
-  - top: 0 = top edge, 100 = bottom edge
-  - width and height are also percentages of the total image dimensions
-  - Example: top-left quarter = { top: 0, left: 0, width: 50, height: 50 }
-  - Example: full image = { top: 0, left: 0, width: 100, height: 100 }`;
+  const systemInstruction = `PERFORM A STRICT LITERAL OCR. Identify all text in the image and split it into logical paragraphs.
+CRITICAL RULES — follow exactly:
+- Transcribe text WORD FOR WORD, exactly as written. Do NOT paraphrase, summarize, auto-correct, or replace words with synonyms.
+- If the image says "דמקה, שש בש, מטקות" — return exactly that. Never invent "משחקי קופסא" or any other generalization.
+- A heading + its lines = ONE paragraph. A list or schedule = ONE paragraph.
+- Detect the primary language of the document and return its ISO code (e.g. "he", "en", "ru").
+- Return bounding box coordinates in 0–1000 scale (0 = top/left edge, 1000 = bottom/right edge).`;
 
   const body = JSON.stringify({
     systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -62,12 +65,12 @@ Rules:
       {
         parts: [
           { inline_data: { mime_type: 'image/jpeg', data: base64 } },
-          { text: 'Divide this image into logical text paragraphs. Return bounding boxes as percentages (0–100) from the top-left corner.' },
+          { text: 'STRICT LITERAL OCR: transcribe every word exactly as written. Split into logical paragraphs. Return bounding boxes in 0–1000 scale. Detect the document language.' },
         ],
       },
     ],
     generationConfig: {
-      temperature: 0.1,
+      temperature: 0.0,
       maxOutputTokens: 8192,
       responseMimeType: 'application/json',
       responseSchema: RESPONSE_SCHEMA,
@@ -92,11 +95,12 @@ Rules:
 
   const parsed = JSON.parse(content);
   const boxes = parsed.paragraphs || [];
+  const language = parsed.documentLanguage || 'he';
 
   console.log('=== GEMINI RAW JSON ===');
   console.log(JSON.stringify(parsed, null, 2));
 
-  return (boxes as any[])
+  const paragraphs = (boxes as any[])
     .map((item: any, index: number) => ({
       id: `p-${index}`,
       text: item.text?.trim() || '',
@@ -110,4 +114,6 @@ Rules:
       },
     }))
     .filter((p: Paragraph) => p.text.length > 0);
+
+  return { paragraphs, language };
 }

@@ -15,6 +15,7 @@ import { Paragraph } from '../services/claude';
 interface Props {
   imageUri: string;
   paragraphs: Paragraph[];
+  language: string;
   isCached: boolean;
   onExit: () => void;
   onDelete: () => void;
@@ -35,7 +36,7 @@ function parseWords(text: string): { words: string[]; lineBreaks: Set<number> } 
   return { words, lineBreaks };
 }
 
-export default function BoardScreen({ imageUri, paragraphs, isCached, onExit, onDelete }: Props) {
+export default function BoardScreen({ imageUri, paragraphs, language, isCached, onExit, onDelete }: Props) {
   const [imageLayout, setImageLayout] = useState<{ width: number; height: number } | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(null);
   const [activeParagraph, setActiveParagraph] = useState<Paragraph | null>(null);
@@ -82,7 +83,7 @@ export default function BoardScreen({ imageUri, paragraphs, isCached, onExit, on
 
     setTimeout(() => {
       Speech.speak(p.text, {
-        language: 'he-IL',
+        language: language,
         rate: 0.85,
         onBoundary: (event) => {
           const upToChar = p.text.slice(0, event.charIndex);
@@ -103,6 +104,7 @@ export default function BoardScreen({ imageUri, paragraphs, isCached, onExit, on
   };
 
   const rendered = getRenderedRect();
+  const isRTL = ['he', 'ar', 'fa', 'ur'].includes(language);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -136,7 +138,7 @@ export default function BoardScreen({ imageUri, paragraphs, isCached, onExit, on
           const isActive = activeParagraph?.id === p.id;
           const left = rendered.oX + p.box.x * rendered.rW;
           const top = rendered.oY + p.box.y * rendered.rH;
-          const width = p.box.width * rendered.rW;
+          const width = Math.max(p.box.width * rendered.rW, 80);
           const height = Math.max(p.box.height * rendered.rH, 44);
 
           return (
@@ -165,7 +167,7 @@ export default function BoardScreen({ imageUri, paragraphs, isCached, onExit, on
             style={styles.wordScroll}
             showsVerticalScrollIndicator={false}
           >
-            <Text style={styles.wordLine}>
+            <Text style={[styles.wordLine, isRTL ? styles.textRTL : styles.textLTR]}>
               {words.map((word, i) => (
                 <Text key={i}>
                   {lineBreaks.has(i) ? '\n' : (i > 0 ? ' ' : '')}
@@ -242,8 +244,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 28,
     color: '#FFFFFF',
+  },
+  textRTL: {
     textAlign: 'right',
     writingDirection: 'rtl',
+  },
+  textLTR: {
+    textAlign: 'left',
+    writingDirection: 'ltr',
   },
   word: {
     fontSize: 18,

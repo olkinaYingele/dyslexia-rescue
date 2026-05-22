@@ -14,7 +14,7 @@ const { width } = Dimensions.get('window');
 const THUMB_SIZE = (width - 48) / 3;
 
 interface Props {
-  onParagraphsReady: (paragraphs: Paragraph[], imageUri: string, cacheId?: string, originalUri?: string) => void;
+  onParagraphsReady: (paragraphs: Paragraph[], imageUri: string, language: string, cacheId?: string, originalUri?: string) => void;
 }
 
 export default function HomeScreen({ onParagraphsReady }: Props) {
@@ -45,14 +45,14 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
         { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: true }
       );
       setStatus('מנתח טקסט...');
-      const paragraphs = await extractParagraphs(manipulated.base64 || '');
+      const { paragraphs, language } = await extractParagraphs(manipulated.base64 || '');
       if (paragraphs.length === 0) {
         Alert.alert('לא נמצא טקסט', 'לא זוהה טקסט בתמונה. נסה שוב.');
         return;
       }
       setDone(true);
       await new Promise(r => setTimeout(r, 400));
-      onParagraphsReady(paragraphs, manipulated.uri, undefined, manipulated.uri);
+      onParagraphsReady(paragraphs, manipulated.uri, language, undefined, manipulated.uri);
     } catch (e: any) {
       Alert.alert('שגיאה', e.message || 'אירעה שגיאה. נסה שוב.');
     } finally {
@@ -76,7 +76,7 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
   };
 
   const openCached = (item: CachedScreen) => {
-    onParagraphsReady(item.paragraphs, `data:image/jpeg;base64,${item.imageBase64}`, item.id);
+    onParagraphsReady(item.paragraphs, `data:image/jpeg;base64,${item.imageBase64}`, 'he', item.id);
   };
 
   const handleDelete = (item: CachedScreen) => {
