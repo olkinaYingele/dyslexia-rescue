@@ -23,12 +23,13 @@ const RESPONSE_SCHEMA = {
     },
     paragraphs: {
       type: 'array',
+      description: 'ONLY natural language sentences and phrases. ABSOLUTELY NO math, NO logic symbols, NO single characters like A, B, C.',
       items: {
         type: 'object',
         properties: {
           text: {
             type: 'string',
-            description: 'The EXACT literal text of the paragraph, word for word, exactly as it appears. Do not change, summarize, or fix anything.',
+            description: 'Strictly human-readable sentences or explanatory phrases in natural language (Hebrew, Russian, etc.). DO NOT include single letters, variables, logic gate names (AND/NOT/XOR), or math/boolean equations.',
           },
           boundingBox: {
             type: 'object',
@@ -51,14 +52,16 @@ const RESPONSE_SCHEMA = {
 export async function extractParagraphs(base64: string): Promise<{ paragraphs: Paragraph[]; language: string }> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
-  const systemInstruction = `PERFORM A STRICT CHARACTER-BY-CHARACTER LITERAL OCR. Your only task is to visually scan the image for natural language text and transcribe it EXACTLY as written, symbol by symbol, word for word.
-CRITICAL RULES:
-1. NEVER guess or predict words based on context. If a line says 'דלת סגורה, חלון 1 פתוח, חלון 2 סגור', transcribe exactly that. DO NOT hallucinate or repeat previous paragraphs.
-2. DO NOT try to make the text make sense. Act like a blind mechanical scanner.
-3. Completely IGNORE truth tables, math equations, logic gate drawings, and standalone letters/numbers.
-4. Only capture real text sentences, phrases, and handwritten descriptions.
-5. Return bounding box coordinates in 0–1000 scale (0 = top/left edge, 1000 = bottom/right edge).
-6. Detect the primary language of the document and return its ISO code (e.g. "he", "en", "ru").`;
+  const systemInstruction = `CRITICAL OCR TASK: Extract ONLY full handwritten sentences, explanations, and descriptive text phrases written in natural language (Hebrew, Russian, etc.).
+YOU MUST COMPLETELY IGNORE AND DROP:
+1. Single Latin letters used as variables (A, B, C, F).
+2. Logic gate labels and truth table headers (AND, NOT, XOR, OR).
+3. Any mathematical, boolean, or algebraic formulas (like F=A.B.C, x²+3=0).
+4. Pin labels or technical specifications.
+5. Standalone numbers or digit-only content.
+Your output must contain ONLY actual reading text — full sentences and descriptions. Transcribe them literally word-for-word, without any corrections or paraphrasing.
+Return bounding box coordinates in 0–1000 scale (0 = top/left edge, 1000 = bottom/right edge).
+Detect the primary language and return its ISO code (e.g. "he", "en", "ru").`;
 
   const body = JSON.stringify({
     systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -66,7 +69,7 @@ CRITICAL RULES:
       {
         parts: [
           { inline_data: { mime_type: 'image/jpeg', data: base64 } },
-          { text: 'STRICT CHARACTER-BY-CHARACTER OCR. Transcribe ONLY real text sentences and phrases, symbol by symbol, exactly as written. NEVER guess or hallucinate words. IGNORE truth tables, equations, logic gate drawings, standalone letters/numbers. Bounding boxes in 0–1000 scale. Detect document language.' },
+          { text: 'Extract ONLY full natural language sentences and descriptive phrases (Hebrew, Russian, etc.). COMPLETELY IGNORE: single Latin letters (A, B, C), logic gate names (AND/NOT/XOR), boolean formulas, truth tables, standalone numbers. Transcribe eligible text literally word-for-word. Bounding boxes in 0–1000 scale. Detect document language.' },
         ],
       },
     ],
