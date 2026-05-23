@@ -48,6 +48,19 @@ const RESPONSE_SCHEMA = {
   required: ['documentLanguage', 'paragraphs'],
 };
 
+// Returns true if the text is mostly numbers/formulas and should be skipped
+function isFormulaOrNumbers(text: string): boolean {
+  // Count letters (any language) vs non-letters
+  const letters = (text.match(/\p{L}/gu) || []).length;
+  const total = text.replace(/\s/g, '').length;
+  if (total === 0) return true;
+  // If less than 30% of non-space characters are letters — it's a formula/numbers
+  if (letters / total < 0.3) return true;
+  // If fewer than 3 actual letters in the whole text — too short to be a real paragraph
+  if (letters < 3) return true;
+  return false;
+}
+
 export async function extractParagraphs(base64: string): Promise<{ paragraphs: Paragraph[]; language: string }> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
@@ -57,7 +70,13 @@ CRITICAL RULES — follow exactly:
 - If the image says "דמקה, שש בש, מטקות" — return exactly that. Never invent "משחקי קופסא" or any other generalization.
 - A heading + its lines = ONE paragraph. A list or schedule = ONE paragraph.
 - Detect the primary language of the document and return its ISO code (e.g. "he", "en", "ru").
-- Return bounding box coordinates in 0–1000 scale (0 = top/left edge, 1000 = bottom/right edge).`;
+- Return bounding box coordinates in 0–1000 scale (0 = top/left edge, 1000 = bottom/right edge).
+
+SKIP the following — do NOT include them in the output:
+- Mathematical formulas, equations, or expressions (e.g. "x² + 3x = 0", "∑n=1", "E=mc²").
+- Paragraphs consisting mainly of digits, symbols, or operators with no readable words (e.g. "3.14", "12 + 7 = 19", "4,000 / 2").
+- Axis labels, legends, or captions that belong to a graph, chart, or diagram.
+- Isolated numbers or codes that are not part of a readable sentence.`;
 
   const body = JSON.stringify({
     systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -65,7 +84,7 @@ CRITICAL RULES — follow exactly:
       {
         parts: [
           { inline_data: { mime_type: 'image/jpeg', data: base64 } },
-          { text: 'STRICT LITERAL OCR: transcribe every word exactly as written. Split into logical paragraphs. Return bounding boxes in 0–1000 scale. Detect the document language.' },
+          { text: 'STRICT LITERAL OCR: transcribe every word exactly as written. Split into logical paragraphs. Return bounding boxes in 0–1000 scale. Detect the document language. SKIP formulas, equations, pure numbers, and graph/chart labels.' },
         ],
       },
     ],
@@ -119,7 +138,7 @@ CRITICAL RULES — follow exactly:
         height: (item.boundingBox?.height ?? 0) / 1000,
       },
     }))
-    .filter((p: Paragraph) => p.text.length > 0);
+    .filter((p: Paragraph) => p.text.length > 0 && !isFormulaOrNumbers(p.text));
 
   return { paragraphs, language };
 }
