@@ -51,10 +51,11 @@ const RESPONSE_SCHEMA = {
 export async function extractParagraphs(base64: string): Promise<{ paragraphs: Paragraph[]; language: string }> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
-  const systemInstruction = `PERFORM A STRICT LITERAL OCR. Identify all text in the image and split it into logical paragraphs.
-CRITICAL RULES — follow exactly:
+  const systemInstruction = `PERFORM A FILTERED LITERAL OCR. Identify and transcribe ONLY the explanatory natural language text blocks, sentences, and handwritten descriptions.
+IGNORE and DO NOT transcribe: truth tables, logic gates diagrams, electrical circuits, standalone variables, and mathematical/boolean equations (like F = A.B.C or algebraic expressions).
+For the eligible text blocks:
 - Transcribe text WORD FOR WORD, exactly as written. Do NOT paraphrase, summarize, auto-correct, or replace words with synonyms.
-- If the image says "דמקה, שש בש, מטקות" — return exactly that. Never invent "משחקי קופסא" or any other generalization.
+- If it says "דמקה, שש בש, מטקות" — return exactly that. Never invent "משחקי קופסא" or any other generalization.
 - A heading + its lines = ONE paragraph. A list or schedule = ONE paragraph.
 - Detect the primary language of the document and return its ISO code (e.g. "he", "en", "ru").
 - Return bounding box coordinates in 0–1000 scale (0 = top/left edge, 1000 = bottom/right edge).`;
@@ -65,7 +66,7 @@ CRITICAL RULES — follow exactly:
       {
         parts: [
           { inline_data: { mime_type: 'image/jpeg', data: base64 } },
-          { text: 'STRICT LITERAL OCR: transcribe every word exactly as written. Split into logical paragraphs. Return bounding boxes in 0–1000 scale. Detect the document language.' },
+          { text: 'PERFORM A FILTERED LITERAL OCR. Transcribe ONLY natural language text (explanations, descriptions, sentences). IGNORE formulas, equations, boolean expressions (like F = A.B.C), truth tables, circuit diagrams, and standalone variables. For eligible text: strict word-for-word transcription, no corrections. Return bounding boxes in 0–1000 scale. Detect the document language.' },
         ],
       },
     ],
