@@ -69,7 +69,7 @@ export default function App() {
   };
 
   const handleExit = async () => {
-    if (unsavedUri) await saveToCache(unsavedUri, paragraphs);
+    if (unsavedUri) await saveToCache(unsavedUri, paragraphs, language);
     setUnsavedUri(null);
     setCurrentCacheId(null);
     setScreen('home');

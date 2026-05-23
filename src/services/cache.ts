@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Paragraph } from './claude';
 
-const CACHE_KEY = 'recent_screens_v4';
+const CACHE_KEY = 'recent_screens_v5';
 const MAX_ITEMS = 5;
 
 export interface CachedScreen {
@@ -11,11 +11,13 @@ export interface CachedScreen {
   imageBase64: string;   // 500px — для BoardScreen
   paragraphs: Paragraph[];
   timestamp: number;
+  language: string;
 }
 
 export async function saveToCache(
   imageUri: string,
-  paragraphs: Paragraph[]
+  paragraphs: Paragraph[],
+  language: string = 'he'
 ): Promise<void> {
   try {
     const [thumb, full] = await Promise.all([
@@ -37,6 +39,7 @@ export async function saveToCache(
       imageBase64: full.base64 || '',
       paragraphs,
       timestamp: Date.now(),
+      language,
     };
 
     const existing = await loadCache();

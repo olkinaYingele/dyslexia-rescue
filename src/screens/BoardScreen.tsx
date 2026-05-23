@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Image,
@@ -8,6 +8,9 @@ import {
   SafeAreaView,
   LayoutChangeEvent,
   ScrollView,
+  Animated,
+  PanResponder,
+  Modal,
 } from 'react-native';
 import * as Speech from 'expo-speech';
 import { Feather } from '@expo/vector-icons';
@@ -23,7 +26,6 @@ interface Props {
   onDelete: () => void;
 }
 
-// All colors from the Material palette
 const COLORS = ['#2F628C', '#51606F', '#68587A', '#0F4A73', '#3A4857', '#504061', '#245882', '#42474E'];
 
 function parseWords(text: string): { words: string[]; lineBreaks: Set<number> } {
@@ -43,6 +45,12 @@ function formatTimestamp(ts?: number): string {
   return d.toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
+function getDistance(touches: any[]): number {
+  const dx = touches[0].pageX - touches[1].pageX;
+  const dy = touches[0].pageY - touches[1].pageY;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
 export default function BoardScreen({ imageUri, paragraphs, language, isCached, timestamp, onExit, onDelete }: Props) {
   const [imageLayout, setImageLayout] = useState<{ width: number; height: number } | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(null);
@@ -51,10 +59,121 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
   const [isPlaying, setIsPlaying] = useState(false);
   const [words, setWords] = useState<string[]>([]);
   const [lineBreaks, setLineBreaks] = useState<Set<number>>(new Set());
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  // Zoom & pan animated values
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const translateXAnim = useRef(new Animated.Value(0)).current;
+  const translateYAnim = useRef(new Animated.Value(0)).current;
+
+  // Refs to track current values (not triggering re-render)
+  const currentScale = useRef(1);
+  const currentTransX = useRef(0);
+  const currentTransY = useRef(0);
+  const lastScale = useRef(1);
+  const lastTransX = useRef(0);
+  const lastTransY = useRef(0);
+  const initDist = useRef(0);
+
+  // Double-tap detection
+  const lastTapTime = useRef(0);
+  // Flag to suppress double-tap after a pinch
+  const isPinching = useRef(false);
 
   useEffect(() => {
     return () => { Speech.stop(); };
   }, []);
+
+  const resetZoom = useCallback(() => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, damping: 20 }),
+      Animated.spring(translateXAnim, { toValue: 0, useNativeDriver: true, damping: 20 }),
+      Animated.spring(translateYAnim, { toValue: 0, useNativeDriver: true, damping: 20 }),
+    ]).start();
+    currentScale.current = 1;
+    currentTransX.current = 0;
+    currentTransY.current = 0;
+    lastScale.current = 1;
+    lastTransX.current = 0;
+    lastTransY.current = 0;
+  }, [scaleAnim, translateXAnim, translateYAnim]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      // Immediately capture pinch (2 fingers)
+      onStartShouldSetPanResponder: (evt) => evt.nativeEvent.touches.length >= 2,
+      onStartShouldSetPanResponderCapture: (evt) => evt.nativeEvent.touches.length >= 2,
+
+      // Capture pan movement when zoomed in (override child TouchableOpacity)
+      onMoveShouldSetPanResponder: (evt, gs) => {
+        const n = evt.nativeEvent.touches.length;
+        if (n >= 2) return true;
+        if (n === 1 && currentScale.current > 1 && (Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5)) return true;
+        return false;
+      },
+      onMoveShouldSetPanResponderCapture: (evt, gs) => {
+        // Steal pan from child when zoomed
+        const n = evt.nativeEvent.touches.length;
+        if (n === 1 && currentScale.current > 1 && (Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5)) return true;
+        return false;
+      },
+
+      onPanResponderGrant: (evt) => {
+        const touches = evt.nativeEvent.touches;
+        if (touches.length >= 2) {
+          isPinching.current = true;
+          initDist.current = getDistance(touches);
+        }
+        lastScale.current = currentScale.current;
+        lastTransX.current = currentTransX.current;
+        lastTransY.current = currentTransY.current;
+      },
+
+      onPanResponderMove: (evt, gs) => {
+        const touches = evt.nativeEvent.touches;
+        if (touches.length >= 2) {
+          const dist = getDistance(touches);
+          const newScale = Math.max(1, Math.min(5, lastScale.current * (dist / initDist.current)));
+          currentScale.current = newScale;
+          scaleAnim.setValue(newScale);
+        } else if (currentScale.current > 1) {
+          const newX = lastTransX.current + gs.dx;
+          const newY = lastTransY.current + gs.dy;
+          currentTransX.current = newX;
+          currentTransY.current = newY;
+          translateXAnim.setValue(newX);
+          translateYAnim.setValue(newY);
+        }
+      },
+
+      onPanResponderRelease: () => {
+        // Snap back only if barely zoomed
+        if (currentScale.current < 1.05) {
+          Animated.parallel([
+            Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true }),
+            Animated.spring(translateXAnim, { toValue: 0, useNativeDriver: true }),
+            Animated.spring(translateYAnim, { toValue: 0, useNativeDriver: true }),
+          ]).start();
+          currentScale.current = 1;
+          currentTransX.current = 0;
+          currentTransY.current = 0;
+        }
+        lastScale.current = currentScale.current;
+        lastTransX.current = currentTransX.current;
+        lastTransY.current = currentTransY.current;
+
+        // Clear pinch flag after a short delay (onTouchEnd fires right after)
+        setTimeout(() => { isPinching.current = false; }, 200);
+      },
+
+      onPanResponderTerminate: () => {
+        lastScale.current = currentScale.current;
+        lastTransX.current = currentTransX.current;
+        lastTransY.current = currentTransY.current;
+        setTimeout(() => { isPinching.current = false; }, 200);
+      },
+    })
+  ).current;
 
   const onImageLoad = (e: any) => {
     setNaturalSize({ width: e.nativeEvent.source.width, height: e.nativeEvent.source.height });
@@ -110,6 +229,18 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
     setCurrentWordIndex(-1);
   };
 
+  // Double-tap to reset zoom — but not after a pinch
+  const handleDoubleTap = () => {
+    if (isPinching.current) return;
+    const now = Date.now();
+    if (now - lastTapTime.current < 350) {
+      resetZoom();
+      lastTapTime.current = 0;
+    } else {
+      lastTapTime.current = now;
+    }
+  };
+
   const rendered = getRenderedRect();
   const isRTL = ['he', 'ar', 'fa', 'ur'].includes(language);
 
@@ -123,45 +254,59 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
 
         <Text style={styles.dateText}>{formatTimestamp(timestamp)}</Text>
 
-        <TouchableOpacity style={styles.headerBtn} onPress={() => { stopReading(); onDelete(); }}>
+        <TouchableOpacity style={styles.headerBtn} onPress={() => setShowDeleteModal(true)}>
           <Feather name="trash-2" size={20} color="#72777F" />
         </TouchableOpacity>
       </View>
 
-
       {/* Image with boxes */}
       <View style={styles.imageWrapper} onLayout={onContainerLayout}>
-        <Image
-          source={{ uri: imageUri }}
-          style={styles.image}
-          resizeMode="contain"
-          onLoad={onImageLoad}
-        />
-        {rendered && paragraphs.map((p, i) => {
-          const color = COLORS[i % COLORS.length];
-          const isActive = activeParagraph?.id === p.id;
-          const left = rendered.oX + p.box.x * rendered.rW;
-          const top = rendered.oY + p.box.y * rendered.rH;
-          const width = Math.max(p.box.width * rendered.rW, 80);
-          const height = Math.max(p.box.height * rendered.rH, 44);
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              transform: [
+                { translateX: translateXAnim },
+                { translateY: translateYAnim },
+                { scale: scaleAnim },
+              ],
+            },
+          ]}
+          {...panResponder.panHandlers}
+          onTouchEnd={handleDoubleTap}
+        >
+          <Image
+            source={{ uri: imageUri }}
+            style={styles.image}
+            resizeMode="contain"
+            onLoad={onImageLoad}
+          />
+          {rendered && paragraphs.map((p, i) => {
+            const color = COLORS[i % COLORS.length];
+            const isActive = activeParagraph?.id === p.id;
+            const left = rendered.oX + p.box.x * rendered.rW;
+            const top = rendered.oY + p.box.y * rendered.rH;
+            const width = Math.max(p.box.width * rendered.rW, 80);
+            const height = Math.max(p.box.height * rendered.rH, 44);
 
-          return (
-            <TouchableOpacity
-              key={p.id}
-              style={[
-                styles.box,
-                { left, top, width, height, borderColor: color },
-                isActive && { backgroundColor: `${color}22`, borderWidth: 3 },
-              ]}
-              onPress={() => isActive && isPlaying ? stopReading() : startReading(p)}
-              activeOpacity={0.6}
-            >
-              <View style={[styles.badge, { backgroundColor: color }]}>
-                <Text style={styles.badgeText}>{isActive && isPlaying ? '⏸' : i + 1}</Text>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
+            return (
+              <TouchableOpacity
+                key={p.id}
+                style={[
+                  styles.box,
+                  { left, top, width, height, borderColor: color },
+                  isActive && { backgroundColor: `${color}22`, borderWidth: 3 },
+                ]}
+                onPress={() => isActive && isPlaying ? stopReading() : startReading(p)}
+                activeOpacity={0.6}
+              >
+                <View style={[styles.badge, { backgroundColor: color }]}>
+                  <Text style={styles.badgeText}>{isActive && isPlaying ? '⏸' : i + 1}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </Animated.View>
       </View>
 
       {/* Bottom panel */}
@@ -188,6 +333,29 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
           </TouchableOpacity>
         </View>
       )}
+      {/* Delete confirmation modal */}
+      <Modal visible={showDeleteModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>מחיקה</Text>
+            <Text style={styles.modalMessage}>למחוק תמונה זו?</Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnCancel]}
+                onPress={() => setShowDeleteModal(false)}
+              >
+                <Text style={styles.modalBtnCancelText}>ביטול</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnDelete]}
+                onPress={() => { setShowDeleteModal(false); stopReading(); onDelete(); }}
+              >
+                <Text style={styles.modalBtnDeleteText}>מחק</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -195,7 +363,6 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F7F9FF' },
 
-  // Header
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -204,17 +371,19 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     backgroundColor: '#F7F9FF',
   },
-  headerBtn: {
-    padding: 4,
-  },
+  headerBtn: { padding: 4 },
   dateText: {
     fontSize: 13,
     fontFamily: 'Fredoka-Regular',
     color: '#72777F',
   },
 
-  // Image
-  imageWrapper: { flex: 1, position: 'relative', backgroundColor: '#F7F9FF' },
+  imageWrapper: {
+    flex: 1,
+    position: 'relative',
+    backgroundColor: '#F7F9FF',
+    overflow: 'hidden',
+  },
   image: { width: '100%', height: '100%' },
   box: {
     position: 'absolute',
@@ -238,7 +407,6 @@ const styles = StyleSheet.create({
   },
   badgeText: { color: '#FFF', fontSize: 12, fontWeight: '700' },
 
-  // Bottom panel
   bottomPanel: {
     backgroundColor: '#F7F9FF',
     paddingHorizontal: 16,
@@ -259,7 +427,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     minHeight: 80,
   },
-  wordScroll: {},
   wordLine: {
     fontSize: 18,
     lineHeight: 28,
@@ -280,6 +447,70 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#504061',
   },
+  // Delete modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCard: {
+    width: 300,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingHorizontal: 24,
+    paddingTop: 28,
+    paddingBottom: 20,
+    alignItems: 'flex-end',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: 'Fredoka-SemiBold',
+    color: '#181C20',
+    marginBottom: 6,
+    textAlign: 'right',
+  },
+  modalMessage: {
+    fontSize: 15,
+    fontFamily: 'Fredoka-Regular',
+    color: '#51606F',
+    textAlign: 'right',
+    marginBottom: 24,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    alignSelf: 'stretch',
+  },
+  modalBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBtnCancel: {
+    backgroundColor: '#DEE3EB',
+  },
+  modalBtnCancelText: {
+    fontSize: 16,
+    fontFamily: 'Fredoka-Medium',
+    color: '#42474E',
+  },
+  modalBtnDelete: {
+    backgroundColor: '#2F628C',
+  },
+  modalBtnDeleteText: {
+    fontSize: 16,
+    fontFamily: 'Fredoka-Medium',
+    color: '#FFFFFF',
+  },
+
   playBtn: {
     width: 52,
     height: 52,

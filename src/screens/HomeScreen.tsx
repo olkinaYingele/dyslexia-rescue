@@ -76,7 +76,7 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
   };
 
   const openCached = (item: CachedScreen) => {
-    onParagraphsReady(item.paragraphs, `data:image/jpeg;base64,${item.imageBase64}`, 'he', item.id);
+    onParagraphsReady(item.paragraphs, `data:image/jpeg;base64,${item.imageBase64}`, item.language || 'he', item.id);
   };
 
   const handleDelete = (item: CachedScreen) => {
