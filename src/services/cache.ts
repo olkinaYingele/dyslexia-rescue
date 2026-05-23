@@ -2,8 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Paragraph } from './claude';
 
-const CACHE_KEY = 'recent_screens_v5';
-const MAX_ITEMS = 5;
+const CACHE_KEY = 'recent_screens_v6';
+const MAX_ITEMS = 30;
 
 export interface CachedScreen {
   id: string;
@@ -12,6 +12,18 @@ export interface CachedScreen {
   paragraphs: Paragraph[];
   timestamp: number;
   language: string;
+  title: string;         // первые 1–2 слова из первого абзаца
+}
+
+// Извлекает 1–2 первых слова из текста абзацев
+function extractTitle(paragraphs: Paragraph[]): string {
+  const text = (paragraphs[0]?.text || '').trim();
+  const words = text.split(/\s+/).filter(w => w.replace(/[^\p{L}\p{N}]/gu, '').length > 1);
+  if (words.length === 0) return '';
+  const first = words[0].replace(/[.,;:!?"""'']+$/, '');
+  if (first.length > 6 || words.length === 1) return first;
+  const second = words[1].replace(/[.,;:!?"""'']+$/, '');
+  return `${first} ${second}`;
 }
 
 export async function saveToCache(
@@ -40,6 +52,7 @@ export async function saveToCache(
       paragraphs,
       timestamp: Date.now(),
       language,
+      title: extractTitle(paragraphs),
     };
 
     const existing = await loadCache();
@@ -65,6 +78,17 @@ export async function deleteFromCache(id: string): Promise<void> {
   const items = await loadCache();
   const updated = items.filter(i => i.id !== id);
   await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(updated));
+}
+
+export async function deleteDayFromCache(dateKey: string): Promise<void> {
+  const items = await loadCache();
+  const updated = items.filter(i => getDayKey(i.timestamp) !== dateKey);
+  await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(updated));
+}
+
+export function getDayKey(timestamp: number): string {
+  const d = new Date(timestamp);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 export async function clearCache(): Promise<void> {

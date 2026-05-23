@@ -1,20 +1,55 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Alert,
-  SafeAreaView, FlatList, Image, Dimensions,
+  SafeAreaView, ScrollView, Image, Dimensions, Modal,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { extractParagraphs, Paragraph } from '../services/claude';
-import { saveToCache, loadCache, deleteFromCache, CachedScreen } from '../services/cache';
+import { saveToCache, loadCache, deleteFromCache, deleteDayFromCache, getDayKey, CachedScreen } from '../services/cache';
 import ProgressLoader from '../components/ProgressLoader';
 
 const { width } = Dimensions.get('window');
 const THUMB_SIZE = (width - 48) / 2;
 
+interface DayGroup {
+  dateKey: string;
+  label: string;
+  items: CachedScreen[];
+}
+
 interface Props {
   onParagraphsReady: (paragraphs: Paragraph[], imageUri: string, language: string, cacheId?: string, originalUri?: string) => void;
+}
+
+function getDayLabel(dateKey: string): string {
+  const today = getDayKey(Date.now());
+  const yesterday = getDayKey(Date.now() - 86400000);
+  if (dateKey === today) return 'היום';
+  if (dateKey === yesterday) return 'אתמול';
+  const d = new Date(dateKey);
+  return d.toLocaleDateString('he-IL', { day: 'numeric', month: 'long' });
+}
+
+function groupByDay(items: CachedScreen[]): DayGroup[] {
+  const map = new Map<string, CachedScreen[]>();
+  for (const item of items) {
+    const key = getDayKey(item.timestamp);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(item);
+  }
+  return Array.from(map.entries()).map(([dateKey, dayItems]) => ({
+    dateKey,
+    label: getDayLabel(dateKey),
+    items: dayItems,
+  }));
+}
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
+  return chunks;
 }
 
 export default function HomeScreen({ onParagraphsReady }: Props) {
@@ -22,6 +57,7 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
   const [status, setStatus] = useState('');
   const [done, setDone] = useState(false);
   const [recent, setRecent] = useState<CachedScreen[]>([]);
+  const [deleteDayModal, setDeleteDayModal] = useState<DayGroup | null>(null);
 
   const refreshCache = useCallback(async () => {
     setRecent(await loadCache());
@@ -79,21 +115,14 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
     onParagraphsReady(item.paragraphs, `data:image/jpeg;base64,${item.imageBase64}`, item.language || 'he', item.id);
   };
 
-  const handleDelete = (item: CachedScreen) => {
-    Alert.alert('מחיקה', 'למחוק תמונה זו?', [
-      { text: 'ביטול', style: 'cancel' },
-      { text: 'מחק', style: 'destructive', onPress: async () => {
-        await deleteFromCache(item.id);
-        await refreshCache();
-      }},
-    ]);
+  const confirmDeleteDay = async (group: DayGroup) => {
+    await deleteDayFromCache(group.dateKey);
+    await refreshCache();
+    setDeleteDayModal(null);
   };
 
-  const formatDate = (ts: number) => {
-    const d = new Date(ts);
-    const date = d.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric', year: '2-digit' });
-    const time = d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
-    return `${date}  ${time}`;
+  const formatTime = (ts: number) => {
+    return new Date(ts).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
   };
 
   if (loading) {
@@ -103,6 +132,8 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
       </SafeAreaView>
     );
   }
+
+  const dayGroups = groupByDay(recent);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -124,43 +155,86 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
         </TouchableOpacity>
       </View>
 
-      {/* Recent grid */}
-      {recent.length > 0 && (
-        <View style={styles.recentSection}>
-          <Text style={styles.recentTitle}>אחרונים</Text>
-          <FlatList
-            data={recent}
-            numColumns={2}
-            keyExtractor={i => i.id}
-            scrollEnabled={true}
-            columnWrapperStyle={styles.gridRow}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.gridItem}
-                onPress={() => openCached(item)}
-                activeOpacity={0.85}
-              >
-                <Image
-                  source={{ uri: `data:image/jpeg;base64,${item.thumbBase64}` }}
-                  style={styles.gridThumb}
-                />
-                <View style={styles.gridFooter}>
-                  <Text style={styles.gridDate}>{formatDate(item.timestamp)}</Text>
+      {/* Archive grouped by day */}
+      {dayGroups.length > 0 && (
+        <ScrollView style={styles.recentSection} showsVerticalScrollIndicator={false}>
+          {dayGroups.map(group => (
+            <View key={group.dateKey}>
+              {/* Day header */}
+              <View style={styles.dayHeader}>
+                <TouchableOpacity
+                  style={styles.dayDeleteBtn}
+                  onPress={() => setDeleteDayModal(group)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Feather name="trash-2" size={15} color="#72777F" />
+                </TouchableOpacity>
+                <Text style={styles.dayLabel}>{group.label}</Text>
+              </View>
+
+              {/* Grid rows of 2 */}
+              {chunkArray(group.items, 2).map((row, rowIdx) => (
+                <View key={rowIdx} style={styles.gridRow}>
+                  {row.map(item => (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={styles.gridItem}
+                      onPress={() => openCached(item)}
+                      activeOpacity={0.85}
+                    >
+                      <Image
+                        source={{ uri: `data:image/jpeg;base64,${item.thumbBase64}` }}
+                        style={styles.gridThumb}
+                      />
+                      <View style={styles.gridFooter}>
+                        {item.title ? (
+                          <Text style={styles.gridTitle} numberOfLines={1}>{item.title}</Text>
+                        ) : null}
+                        <Text style={styles.gridDate}>{formatTime(item.timestamp)}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                  {/* Placeholder if odd number of items in row */}
+                  {row.length === 1 && <View style={{ width: THUMB_SIZE }} />}
                 </View>
-              </TouchableOpacity>
-            )}
-          />
-        </View>
+              ))}
+            </View>
+          ))}
+          <View style={{ height: 24 }} />
+        </ScrollView>
       )}
+
+      {/* Delete day confirmation modal */}
+      <Modal visible={!!deleteDayModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>מחיקת יום</Text>
+            <Text style={styles.modalMessage}>
+              למחוק את כל התמונות מ{deleteDayModal?.label}?{'\n'}({deleteDayModal?.items.length} תמונות)
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnCancel]}
+                onPress={() => setDeleteDayModal(null)}
+              >
+                <Text style={styles.modalBtnCancelText}>ביטול</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnDelete]}
+                onPress={() => deleteDayModal && confirmDeleteDay(deleteDayModal)}
+              >
+                <Text style={styles.modalBtnDeleteText}>מחק</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F7F9FF',
-  },
+  container: { flex: 1, backgroundColor: '#F7F9FF' },
   loadingScreen: {
     flex: 1,
     backgroundColor: '#F7F9FF',
@@ -217,20 +291,34 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  // Recent
+  // Archive
   recentSection: {
     flex: 1,
     paddingHorizontal: 16,
   },
-  recentTitle: {
-    fontSize: 20,
+
+  // Day section
+  dayHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    marginTop: 4,
+    paddingHorizontal: 4,
+  },
+  dayLabel: {
+    fontSize: 17,
     fontFamily: 'Fredoka-SemiBold',
     color: '#181C20',
     textAlign: 'right',
-    marginBottom: 12,
-    paddingHorizontal: 8,
   },
+  dayDeleteBtn: {
+    padding: 4,
+  },
+
+  // Grid
   gridRow: {
+    flexDirection: 'row',
     gap: 8,
     marginBottom: 8,
   },
@@ -253,20 +341,81 @@ const styles = StyleSheet.create({
   },
   gridFooter: {
     backgroundColor: '#EAF1FC',
-    paddingVertical: 8,
+    paddingVertical: 6,
     paddingHorizontal: 10,
+  },
+  gridTitle: {
+    color: '#181C20',
+    fontSize: 13,
+    fontFamily: 'Fredoka-Medium',
+    textAlign: 'right',
   },
   gridDate: {
     color: '#51606F',
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: 'Fredoka-Regular',
-    textAlign: 'center',
+    textAlign: 'right',
+    marginTop: 1,
   },
-  hint: {
-    textAlign: 'center',
-    fontSize: 12,
-    color: '#C7C7CC',
-    marginTop: 8,
-    marginBottom: 8,
+
+  // Delete day modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCard: {
+    width: 300,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingHorizontal: 24,
+    paddingTop: 28,
+    paddingBottom: 20,
+    alignItems: 'flex-end',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: 'Fredoka-SemiBold',
+    color: '#181C20',
+    marginBottom: 6,
+    textAlign: 'right',
+  },
+  modalMessage: {
+    fontSize: 15,
+    fontFamily: 'Fredoka-Regular',
+    color: '#51606F',
+    textAlign: 'right',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    alignSelf: 'stretch',
+  },
+  modalBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBtnCancel: { backgroundColor: '#DEE3EB' },
+  modalBtnCancelText: {
+    fontSize: 16,
+    fontFamily: 'Fredoka-Medium',
+    color: '#42474E',
+  },
+  modalBtnDelete: { backgroundColor: '#2F628C' },
+  modalBtnDeleteText: {
+    fontSize: 16,
+    fontFamily: 'Fredoka-Medium',
+    color: '#FFFFFF',
   },
 });
