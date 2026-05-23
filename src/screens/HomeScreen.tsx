@@ -108,7 +108,7 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>קורא</Text>
+        <Text style={styles.title}>מקריא</Text>
         <Text style={styles.subtitle}>צלם • האזן • הבן</Text>
       </View>
 

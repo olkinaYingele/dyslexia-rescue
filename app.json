@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "dyslexia-rescue",
-    "slug": "dyslexia-rescue",
+    "name": "מקריא",
+    "slug": "makria",
     "version": "1.0.0",
     "orientation": "default",
     "icon": "./assets/icon.png",
