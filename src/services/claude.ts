@@ -40,8 +40,12 @@ const RESPONSE_SCHEMA = {
             },
             required: ['top', 'left', 'width', 'height'],
           },
+          isFormula: {
+            type: 'boolean',
+            description: 'true if this is a formula, equation, logic expression, pure numbers, or diagram label. false if it is natural language text.',
+          },
         },
-        required: ['text', 'boundingBox'],
+        required: ['text', 'boundingBox', 'isFormula'],
       },
     },
   },
@@ -71,12 +75,7 @@ CRITICAL RULES — follow exactly:
 - A heading + its lines = ONE paragraph. A list or schedule = ONE paragraph.
 - Detect the primary language of the document and return its ISO code (e.g. "he", "en", "ru").
 - Return bounding box coordinates in 0–1000 scale (0 = top/left edge, 1000 = bottom/right edge).
-
-SKIP the following — do NOT include them in the output:
-- Mathematical formulas, equations, or expressions (e.g. "x² + 3x = 0", "∑n=1", "E=mc²").
-- Paragraphs consisting mainly of digits, symbols, or operators with no readable words (e.g. "3.14", "12 + 7 = 19", "4,000 / 2").
-- Axis labels, legends, or captions that belong to a graph, chart, or diagram.
-- Isolated numbers or codes that are not part of a readable sentence.`;
+- For each paragraph, set isFormula=true if it is a mathematical formula, equation, logic expression (e.g. A·B·C, x²+3=0), pure numbers, or a label/caption for a diagram or graph. Set isFormula=false for natural language text (even short phrases).`;
 
   const body = JSON.stringify({
     systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -84,7 +83,7 @@ SKIP the following — do NOT include them in the output:
       {
         parts: [
           { inline_data: { mime_type: 'image/jpeg', data: base64 } },
-          { text: 'STRICT LITERAL OCR: transcribe every word exactly as written. Split into logical paragraphs. Return bounding boxes in 0–1000 scale. Detect the document language. SKIP formulas, equations, pure numbers, and graph/chart labels.' },
+          { text: 'STRICT LITERAL OCR: transcribe every word exactly as written. Split into logical paragraphs. Return bounding boxes in 0–1000 scale. Detect the document language. Mark isFormula=true for formulas, equations, logic expressions, pure numbers, and graph/chart labels.' },
         ],
       },
     ],
@@ -138,7 +137,12 @@ SKIP the following — do NOT include them in the output:
         height: (item.boundingBox?.height ?? 0) / 1000,
       },
     }))
-    .filter((p: Paragraph) => p.text.length > 0 && !isFormulaOrNumbers(p.text));
+    .filter((p: Paragraph, _: number, __: Paragraph[]) => {
+      if (p.text.length === 0) return false;
+      if ((boxes as any[])[p.index]?.isFormula === true) return false; // Gemini flagged it
+      if (isFormulaOrNumbers(p.text)) return false;                    // client-side fallback
+      return true;
+    });
 
   return { paragraphs, language };
 }
