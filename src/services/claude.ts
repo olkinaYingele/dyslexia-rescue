@@ -40,30 +40,13 @@ const RESPONSE_SCHEMA = {
             },
             required: ['top', 'left', 'width', 'height'],
           },
-          isFormula: {
-            type: 'boolean',
-            description: 'true if this is a formula, equation, logic expression, pure numbers, or diagram label. false if it is natural language text.',
-          },
         },
-        required: ['text', 'boundingBox', 'isFormula'],
+        required: ['text', 'boundingBox'],
       },
     },
   },
   required: ['documentLanguage', 'paragraphs'],
 };
-
-// Returns true if the text is mostly numbers/formulas and should be skipped
-function isFormulaOrNumbers(text: string): boolean {
-  // Count letters (any language) vs non-letters
-  const letters = (text.match(/\p{L}/gu) || []).length;
-  const total = text.replace(/\s/g, '').length;
-  if (total === 0) return true;
-  // If less than 30% of non-space characters are letters — it's a formula/numbers
-  if (letters / total < 0.3) return true;
-  // If fewer than 3 actual letters in the whole text — too short to be a real paragraph
-  if (letters < 3) return true;
-  return false;
-}
 
 export async function extractParagraphs(base64: string): Promise<{ paragraphs: Paragraph[]; language: string }> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
@@ -74,8 +57,7 @@ CRITICAL RULES — follow exactly:
 - If the image says "דמקה, שש בש, מטקות" — return exactly that. Never invent "משחקי קופסא" or any other generalization.
 - A heading + its lines = ONE paragraph. A list or schedule = ONE paragraph.
 - Detect the primary language of the document and return its ISO code (e.g. "he", "en", "ru").
-- Return bounding box coordinates in 0–1000 scale (0 = top/left edge, 1000 = bottom/right edge).
-- For each paragraph, set isFormula=true if it is a mathematical formula, equation, logic expression (e.g. A·B·C, x²+3=0), pure numbers, or a label/caption for a diagram or graph. Set isFormula=false for natural language text (even short phrases).`;
+- Return bounding box coordinates in 0–1000 scale (0 = top/left edge, 1000 = bottom/right edge).`;
 
   const body = JSON.stringify({
     systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -83,7 +65,7 @@ CRITICAL RULES — follow exactly:
       {
         parts: [
           { inline_data: { mime_type: 'image/jpeg', data: base64 } },
-          { text: 'STRICT LITERAL OCR: transcribe every word exactly as written. Split into logical paragraphs. Return bounding boxes in 0–1000 scale. Detect the document language. Mark isFormula=true for formulas, equations, logic expressions, pure numbers, and graph/chart labels.' },
+          { text: 'STRICT LITERAL OCR: transcribe every word exactly as written. Split into logical paragraphs. Return bounding boxes in 0–1000 scale. Detect the document language.' },
         ],
       },
     ],
@@ -137,12 +119,7 @@ CRITICAL RULES — follow exactly:
         height: (item.boundingBox?.height ?? 0) / 1000,
       },
     }))
-    .filter((p: Paragraph, _: number, __: Paragraph[]) => {
-      if (p.text.length === 0) return false;
-      if ((boxes as any[])[p.index]?.isFormula === true) return false; // Gemini flagged it
-      if (isFormulaOrNumbers(p.text)) return false;                    // client-side fallback
-      return true;
-    });
+    .filter((p: Paragraph) => p.text.length > 0);
 
   return { paragraphs, language };
 }
