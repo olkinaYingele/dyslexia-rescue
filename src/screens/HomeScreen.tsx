@@ -157,11 +157,13 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
       <View style={styles.header}>
         <Text style={styles.title}>מקריא</Text>
         <Text style={styles.subtitle}>צלם • האזן • הבן</Text>
+        {/* DEV ONLY — раскомментировать для теста группировки по дням
         {__DEV__ && (
           <TouchableOpacity onPress={seedTestDates} style={styles.devBtn}>
             <Text style={styles.devBtnText}>🧪 seed dates</Text>
           </TouchableOpacity>
         )}
+        */}
       </View>
 
       {/* Action buttons */}
