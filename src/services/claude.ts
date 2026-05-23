@@ -23,13 +23,12 @@ const RESPONSE_SCHEMA = {
     },
     paragraphs: {
       type: 'array',
-      description: 'ONLY natural language sentences and phrases. ABSOLUTELY NO math, NO logic symbols, NO single characters like A, B, C.',
       items: {
         type: 'object',
         properties: {
           text: {
             type: 'string',
-            description: 'Strictly human-readable sentences or explanatory phrases in natural language (Hebrew, Russian, etc.). DO NOT include single letters, variables, logic gate names (AND/NOT/XOR), or math/boolean equations.',
+            description: 'The EXACT literal text of the paragraph, word for word, exactly as it appears. Do not change, summarize, or fix anything.',
           },
           boundingBox: {
             type: 'object',
@@ -52,16 +51,13 @@ const RESPONSE_SCHEMA = {
 export async function extractParagraphs(base64: string): Promise<{ paragraphs: Paragraph[]; language: string }> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
-  const systemInstruction = `CRITICAL OCR TASK: Extract ONLY full handwritten sentences, explanations, and descriptive text phrases written in natural language (Hebrew, Russian, etc.).
-YOU MUST COMPLETELY IGNORE AND DROP:
-1. Single Latin letters used as variables (A, B, C, F).
-2. Logic gate labels and truth table headers (AND, NOT, XOR, OR).
-3. Any mathematical, boolean, or algebraic formulas (like F=A.B.C, x²+3=0).
-4. Pin labels or technical specifications.
-5. Standalone numbers or digit-only content.
-Your output must contain ONLY actual reading text — full sentences and descriptions. Transcribe them literally word-for-word, without any corrections or paraphrasing.
-Return bounding box coordinates in 0–1000 scale (0 = top/left edge, 1000 = bottom/right edge).
-Detect the primary language and return its ISO code (e.g. "he", "en", "ru").`;
+  const systemInstruction = `PERFORM A STRICT LITERAL OCR. Identify all text in the image and split it into logical paragraphs.
+CRITICAL RULES — follow exactly:
+- Transcribe text WORD FOR WORD, exactly as written. Do NOT paraphrase, summarize, auto-correct, or replace words with synonyms.
+- If the image says "דמקה, שש בש, מטקות" — return exactly that. Never invent "משחקי קופסא" or any other generalization.
+- A heading + its lines = ONE paragraph. A list or schedule = ONE paragraph.
+- Detect the primary language of the document and return its ISO code (e.g. "he", "en", "ru").
+- Return bounding box coordinates in 0–1000 scale (0 = top/left edge, 1000 = bottom/right edge).`;
 
   const body = JSON.stringify({
     systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -69,7 +65,7 @@ Detect the primary language and return its ISO code (e.g. "he", "en", "ru").`;
       {
         parts: [
           { inline_data: { mime_type: 'image/jpeg', data: base64 } },
-          { text: 'Extract ONLY full natural language sentences and descriptive phrases (Hebrew, Russian, etc.). COMPLETELY IGNORE: single Latin letters (A, B, C), logic gate names (AND/NOT/XOR), boolean formulas, truth tables, standalone numbers. Transcribe eligible text literally word-for-word. Bounding boxes in 0–1000 scale. Detect document language.' },
+          { text: 'STRICT LITERAL OCR: transcribe every word exactly as written. Split into logical paragraphs. Return bounding boxes in 0–1000 scale. Detect the document language.' },
         ],
       },
     ],
