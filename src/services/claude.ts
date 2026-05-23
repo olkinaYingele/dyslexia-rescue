@@ -51,14 +51,14 @@ const RESPONSE_SCHEMA = {
 export async function extractParagraphs(base64: string): Promise<{ paragraphs: Paragraph[]; language: string }> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
-  const systemInstruction = `PERFORM A FILTERED LITERAL OCR. Identify and transcribe ONLY the explanatory natural language text blocks, sentences, and handwritten descriptions.
-IGNORE and DO NOT transcribe: truth tables, logic gates diagrams, electrical circuits, standalone variables, and mathematical/boolean equations (like F = A.B.C or algebraic expressions).
-For the eligible text blocks:
-- Transcribe text WORD FOR WORD, exactly as written. Do NOT paraphrase, summarize, auto-correct, or replace words with synonyms.
-- If it says "דמקה, שש בש, מטקות" — return exactly that. Never invent "משחקי קופסא" or any other generalization.
-- A heading + its lines = ONE paragraph. A list or schedule = ONE paragraph.
-- Detect the primary language of the document and return its ISO code (e.g. "he", "en", "ru").
-- Return bounding box coordinates in 0–1000 scale (0 = top/left edge, 1000 = bottom/right edge).`;
+  const systemInstruction = `PERFORM A STRICT CHARACTER-BY-CHARACTER LITERAL OCR. Your only task is to visually scan the image for natural language text and transcribe it EXACTLY as written, symbol by symbol, word for word.
+CRITICAL RULES:
+1. NEVER guess or predict words based on context. If a line says 'דלת סגורה, חלון 1 פתוח, חלון 2 סגור', transcribe exactly that. DO NOT hallucinate or repeat previous paragraphs.
+2. DO NOT try to make the text make sense. Act like a blind mechanical scanner.
+3. Completely IGNORE truth tables, math equations, logic gate drawings, and standalone letters/numbers.
+4. Only capture real text sentences, phrases, and handwritten descriptions.
+5. Return bounding box coordinates in 0–1000 scale (0 = top/left edge, 1000 = bottom/right edge).
+6. Detect the primary language of the document and return its ISO code (e.g. "he", "en", "ru").`;
 
   const body = JSON.stringify({
     systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -66,7 +66,7 @@ For the eligible text blocks:
       {
         parts: [
           { inline_data: { mime_type: 'image/jpeg', data: base64 } },
-          { text: 'PERFORM A FILTERED LITERAL OCR. Transcribe ONLY natural language text (explanations, descriptions, sentences). IGNORE formulas, equations, boolean expressions (like F = A.B.C), truth tables, circuit diagrams, and standalone variables. For eligible text: strict word-for-word transcription, no corrections. Return bounding boxes in 0–1000 scale. Detect the document language.' },
+          { text: 'STRICT CHARACTER-BY-CHARACTER OCR. Transcribe ONLY real text sentences and phrases, symbol by symbol, exactly as written. NEVER guess or hallucinate words. IGNORE truth tables, equations, logic gate drawings, standalone letters/numbers. Bounding boxes in 0–1000 scale. Detect document language.' },
         ],
       },
     ],
