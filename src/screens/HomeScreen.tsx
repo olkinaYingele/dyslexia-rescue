@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Alert,
   SafeAreaView, ScrollView, Image, Dimensions, Modal,
@@ -60,6 +60,11 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
   const [done, setDone] = useState(false);
   const [recent, setRecent] = useState<CachedScreen[]>([]);
   const [deleteDayModal, setDeleteDayModal] = useState<DayGroup | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const handleCancel = () => {
+    abortRef.current?.abort();
+  };
 
   const refreshCache = useCallback(async () => {
     setRecent(await loadCache());
@@ -69,6 +74,8 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
 
   const processImage = async (uri: string) => {
     const t0 = Date.now();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setLoading(true);
     setDone(false);
     setStatus('מכין תמונה...');
@@ -89,7 +96,7 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
 
       setStatus('מנתח טקסט...');
       const t1 = Date.now();
-      const { paragraphs, language } = await extractParagraphs(manipulated.base64 || '');
+      const { paragraphs, language } = await extractParagraphs(manipulated.base64 || '', controller.signal);
       console.log(`⏱ gemini: ${Date.now() - t1}ms`);
       console.log(`⏱ total to board: ${Date.now() - t0}ms`);
 
@@ -109,8 +116,11 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
         saveToCache(cacheId, { thumbBase64, imageBase64 }, paragraphs, language)
       ).catch(console.warn);
     } catch (e: any) {
-      Alert.alert('שגיאה', e.message || 'אירעה שגיאה. נסה שוב.');
+      if (e.name !== 'AbortError') {
+        Alert.alert('שגיאה', e.message || 'אירעה שגיאה. נסה שוב.');
+      }
     } finally {
+      abortRef.current = null;
       setLoading(false);
       setStatus('');
     }
@@ -147,7 +157,7 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
   if (loading) {
     return (
       <SafeAreaView style={styles.loadingScreen}>
-        <ProgressLoader status={status} done={done} />
+        <ProgressLoader status={status} done={done} onCancel={handleCancel} />
       </SafeAreaView>
     );
   }

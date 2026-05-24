@@ -48,7 +48,7 @@ const RESPONSE_SCHEMA = {
   required: ['documentLanguage', 'paragraphs'],
 };
 
-export async function extractParagraphs(base64: string): Promise<{ paragraphs: Paragraph[]; language: string }> {
+export async function extractParagraphs(base64: string, signal?: AbortSignal): Promise<{ paragraphs: Paragraph[]; language: string }> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
   const systemInstruction = `PERFORM A STRICT LITERAL OCR. Identify all text in the image and split it into logical paragraphs.
@@ -81,7 +81,7 @@ CRITICAL RULES — follow exactly:
   // Retry up to 5 times on 503 (server overload), with increasing delays
   let response: Response | null = null;
   for (let attempt = 1; attempt <= 5; attempt++) {
-    response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+    response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal });
     if (response.ok || response.status !== 503) break;
     if (attempt < 5) await new Promise(r => setTimeout(r, attempt * 3000)); // 3s, 6s, 9s, 12s
   }
