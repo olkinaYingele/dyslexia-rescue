@@ -8,7 +8,6 @@ import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { extractParagraphs, Paragraph } from '../services/claude';
 import { saveToCache, loadCache, deleteFromCache, deleteDayFromCache, getDayKey, CachedScreen } from '../services/cache';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import ProgressLoader from '../components/ProgressLoader';
 
 const { width } = Dimensions.get('window');
@@ -116,21 +115,6 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
     onParagraphsReady(item.paragraphs, `data:image/jpeg;base64,${item.imageBase64}`, item.language || 'he', item.id);
   };
 
-  const seedTestDates = async () => {
-    const items = await loadCache();
-    if (items.length < 2) { Alert.alert('אין מספיק תמונות', 'צריך לפחות 2 תמונות'); return; }
-    const now = Date.now();
-    const DAY = 86400000;
-    const buckets = [0, 1, 3, 7].map(d => now - d * DAY); // сегодня, вчера, 3 дня, неделю назад
-    const updated = items.map((item, i) => ({
-      ...item,
-      timestamp: buckets[i % buckets.length] - i * 60000,
-    }));
-    await AsyncStorage.setItem('recent_screens_v6', JSON.stringify(updated));
-    await refreshCache();
-    Alert.alert('✓', 'תאריכים עודכנו לבדיקה');
-  };
-
   const confirmDeleteDay = async (group: DayGroup) => {
     await deleteDayFromCache(group.dateKey);
     await refreshCache();
@@ -157,13 +141,6 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
       <View style={styles.header}>
         <Text style={styles.title}>מקריא</Text>
         <Text style={styles.subtitle}>צלם • האזן • הבן</Text>
-        {/* DEV ONLY — раскомментировать для теста группировки по дням
-        {__DEV__ && (
-          <TouchableOpacity onPress={seedTestDates} style={styles.devBtn}>
-            <Text style={styles.devBtnText}>🧪 seed dates</Text>
-          </TouchableOpacity>
-        )}
-        */}
       </View>
 
       {/* Action buttons */}
@@ -318,21 +295,6 @@ const styles = StyleSheet.create({
   recentSection: {
     flex: 1,
     paddingHorizontal: 16,
-  },
-
-  // Dev button
-  devBtn: {
-    marginTop: 6,
-    alignSelf: 'flex-end',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    backgroundColor: '#FFE08A',
-    borderRadius: 8,
-  },
-  devBtnText: {
-    fontSize: 12,
-    fontFamily: 'Fredoka-Regular',
-    color: '#42474E',
   },
 
   // Day section
