@@ -40,6 +40,47 @@ function parseWords(text: string): { words: string[]; lineBreaks: Set<number> } 
   return { words, lineBreaks };
 }
 
+// Определяет язык слова по скрипту его букв.
+// prevLang — язык предыдущего слова, для наследования цифрами/пунктуацией.
+function detectWordLang(word: string, prevLang: string | null, docLanguage: string): string {
+  const hebrew   = (word.match(/[֐-׿]/g) || []).length;
+  const cyrillic = (word.match(/[Ѐ-ӿ]/g) || []).length;
+  const latin    = (word.match(/[a-zA-Z]/g) || []).length;
+  const total = hebrew + cyrillic + latin;
+  if (total === 0) return prevLang ?? docLanguage; // цифры/пунктуация — берём язык соседа
+  if (hebrew >= cyrillic && hebrew >= latin) return 'he';
+  if (latin > cyrillic) return 'en';
+  return 'ru';
+}
+
+// Разбивает текст на сегменты по смене скрипта
+function splitByLanguage(text: string, docLanguage: string): { text: string; lang: string }[] {
+  const segments: { text: string; lang: string }[] = [];
+  const parts = text.split(/(\s+)/);
+  let currentLang: string | null = null;
+  let currentText = '';
+
+  for (const part of parts) {
+    if (/^\s*$/.test(part)) {
+      currentText += part;
+      continue;
+    }
+    const partLang = detectWordLang(part, currentLang, docLanguage);
+    if (currentLang === null) {
+      currentLang = partLang;
+      currentText += part;
+    } else if (partLang === currentLang) {
+      currentText += part;
+    } else {
+      if (currentText.trim()) segments.push({ text: currentText, lang: currentLang });
+      currentLang = partLang;
+      currentText = part;
+    }
+  }
+  if (currentText.trim()) segments.push({ text: currentText, lang: currentLang! });
+  return segments.length > 0 ? segments : [{ text, lang: docLanguage }];
+}
+
 function formatTimestamp(ts?: number): string {
   const d = new Date(ts || Date.now());
   const date = d.toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -209,20 +250,31 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
     setCurrentWordIndex(0);
     setIsPlaying(true);
 
-    setTimeout(() => {
-      Speech.speak(p.text, {
-        language: language,
+    const segments = splitByLanguage(p.text, language);
+
+    const speakSegment = (index: number, offset: number) => {
+      if (index >= segments.length) {
+        setIsPlaying(false);
+        setCurrentWordIndex(-1);
+        return;
+      }
+      const seg = segments[index];
+      Speech.speak(seg.text, {
+        language: seg.lang,
         rate: 0.85,
         onBoundary: (event) => {
-          const upToChar = p.text.slice(0, event.charIndex);
+          const absChar = offset + event.charIndex;
+          const upToChar = p.text.slice(0, absChar);
           const wordsBefore = upToChar.trim().split(/\s+/).filter(w => w.length > 0);
           setCurrentWordIndex(wordsBefore.length);
         },
-        onDone: () => { setIsPlaying(false); setCurrentWordIndex(-1); },
+        onDone: () => speakSegment(index + 1, offset + seg.text.length),
         onStopped: () => { setIsPlaying(false); setCurrentWordIndex(-1); },
         onError: () => { setIsPlaying(false); setCurrentWordIndex(-1); },
       });
-    }, 150);
+    };
+
+    setTimeout(() => speakSegment(0, 0), 150);
   }, [language]);
 
   const stopReading = () => {
