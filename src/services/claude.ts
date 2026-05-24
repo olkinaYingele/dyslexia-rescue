@@ -80,24 +80,31 @@ CRITICAL RULES — follow exactly:
 
   // Retry up to 5 times on 503 (server overload), with increasing delays
   let response: Response | null = null;
-  for (let attempt = 1; attempt <= 5; attempt++) {
-    response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal });
-    if (response.ok || response.status !== 503) break;
-    if (attempt < 5) await new Promise(r => setTimeout(r, attempt * 3000)); // 3s, 6s, 9s, 12s
+  try {
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal });
+      if (response.ok || response.status !== 503) break;
+      if (attempt < 5) await new Promise(r => setTimeout(r, attempt * 3000));
+    }
+  } catch (e: any) {
+    if (e.name === 'AbortError') throw e;
+    console.warn('[Gemini] Network error:', e);
+    throw new Error('NO_INTERNET');
   }
 
   if (!response!.ok) {
     const errText = await response!.text();
-    if (response!.status === 503) {
-      throw new Error('השרת עמוס כרגע. נסה שוב בעוד דקה.');
-    }
-    throw new Error(`Gemini API error: ${errText}`);
+    console.warn(`[Gemini] API error ${response!.status}:`, errText);
+    throw new Error('API_ERROR');
   }
 
   const data = await response!.json();
   const parts = data.candidates?.[0]?.content?.parts || [];
   const content = parts.find((p: any) => !p.thought)?.text ?? parts[0]?.text;
-  if (!content) throw new Error('Empty response from Gemini');
+  if (!content) {
+    console.warn('[Gemini] Empty response:', data);
+    throw new Error('EMPTY_RESPONSE');
+  }
 
   const parsed = JSON.parse(content);
   const boxes = parsed.paragraphs || [];

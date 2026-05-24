@@ -62,6 +62,8 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
   const [deleteDayModal, setDeleteDayModal] = useState<DayGroup | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  const showError = (title: string, message: string) => Alert.alert(title, message);
+
   const handleCancel = () => {
     abortRef.current?.abort();
   };
@@ -101,7 +103,7 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
       console.log(`⏱ total to board: ${Date.now() - t0}ms`);
 
       if (paragraphs.length === 0) {
-        Alert.alert('לא נמצא טקסט', 'לא זוהה טקסט בתמונה. נסה שוב.');
+        showError('לא נמצא טקסט', 'נסה לצלם שוב');
         return;
       }
       const cacheId = Date.now().toString();
@@ -114,10 +116,16 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
         prepareFullImage(manipulated.uri),
       ]).then(([thumbBase64, imageBase64]) =>
         saveToCache(cacheId, { thumbBase64, imageBase64 }, paragraphs, language)
-      ).catch(console.warn);
+      ).catch(e => console.warn('[Cache] Save failed:', e));
     } catch (e: any) {
-      if (e.name !== 'AbortError') {
-        Alert.alert('שגיאה', e.message || 'אירעה שגיאה. נסה שוב.');
+      if (e.name === 'AbortError') return;
+      console.warn('[processImage] Error:', e);
+      if (e.message === 'NO_INTERNET') {
+        showError('אין אינטרנט', 'בדוק את החיבור ונסה שוב');
+      } else if (e.message === 'EMPTY_RESPONSE') {
+        showError('לא נמצא טקסט', 'נסה לצלם שוב');
+      } else {
+        showError('שגיאה', 'נסה שוב');
       }
     } finally {
       abortRef.current = null;
@@ -128,14 +136,20 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
 
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') { Alert.alert('נדרשת הרשאה', 'יש לאפשר גישה למצלמה'); return; }
+    if (status !== 'granted') {
+      showError('אין גישה למצלמה', 'יש לאפשר בהגדרות');
+      return;
+    }
     const result = await ImagePicker.launchCameraAsync({ quality: 1 });
     if (!result.canceled) await processImage(result.assets[0].uri);
   };
 
   const pickFromGallery = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') { Alert.alert('נדרשת הרשאה', 'יש לאפשר גישה לגלריה'); return; }
+    if (status !== 'granted') {
+      showError('אין גישה לגלריה', 'יש לאפשר בהגדרות');
+      return;
+    }
     const result = await ImagePicker.launchImageLibraryAsync({ quality: 1 });
     if (!result.canceled) await processImage(result.assets[0].uri);
   };
