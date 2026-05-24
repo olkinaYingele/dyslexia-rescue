@@ -5,7 +5,7 @@ import { useFonts } from 'expo-font';
 import HomeScreen from './src/screens/HomeScreen';
 import BoardScreen from './src/screens/BoardScreen';
 import { Paragraph } from './src/services/claude';
-import { saveToCache, deleteFromCache } from './src/services/cache';
+import { deleteFromCache } from './src/services/cache';
 
 type Screen = 'home' | 'board';
 
@@ -47,7 +47,6 @@ export default function App() {
   const [language, setLanguage] = useState('he');
   const [timestamp, setTimestamp] = useState<number>(Date.now());
   const [currentCacheId, setCurrentCacheId] = useState<string | null>(null);
-  const [unsavedUri, setUnsavedUri] = useState<string | null>(null);
 
   const [fontsLoaded] = useFonts({
     'Fredoka-Regular':  require('./assets/fonts/Fredoka-Regular.ttf'),
@@ -57,20 +56,17 @@ export default function App() {
   });
 
   const handleParagraphsReady = (
-    p: Paragraph[], uri: string, lang: string, cacheId?: string, originalUri?: string
+    p: Paragraph[], uri: string, lang: string, cacheId?: string
   ) => {
     setParagraphs(p);
     setImageUri(uri);
     setLanguage(lang);
     setTimestamp(Date.now());
     setCurrentCacheId(cacheId || null);
-    setUnsavedUri(originalUri || null);
     setScreen('board');
   };
 
-  const handleExit = async () => {
-    if (unsavedUri) await saveToCache(unsavedUri, paragraphs, language);
-    setUnsavedUri(null);
+  const handleExit = () => {
     setCurrentCacheId(null);
     setScreen('home');
   };

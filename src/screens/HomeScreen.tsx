@@ -7,7 +7,7 @@ import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { extractParagraphs, Paragraph } from '../services/claude';
-import { saveToCache, loadCache, deleteFromCache, deleteDayFromCache, getDayKey, CachedScreen } from '../services/cache';
+import { saveToCache, prepareFullImage, prepareThumb, loadCache, deleteFromCache, deleteDayFromCache, getDayKey, CachedScreen } from '../services/cache';
 import ProgressLoader from '../components/ProgressLoader';
 
 const { width } = Dimensions.get('window');
@@ -68,29 +68,46 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
   useEffect(() => { refreshCache(); }, []);
 
   const processImage = async (uri: string) => {
+    const t0 = Date.now();
     setLoading(true);
     setDone(false);
     setStatus('מכין תמונה...');
     try {
+      // Проход 1: фиксируем EXIF-ориентацию (запекаем поворот в пиксели)
       const oriented = await ImageManipulator.manipulateAsync(
         uri, [], { compress: 1, format: ImageManipulator.SaveFormat.JPEG }
       );
       const { width: w, height: h } = oriented;
       const scale = Math.min(1800 / Math.max(w, h), 1);
+      // Проход 2: resize + base64 для Gemini
       const manipulated = await ImageManipulator.manipulateAsync(
         oriented.uri,
         [{ resize: { width: Math.round(w * scale), height: Math.round(h * scale) } }],
         { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: true }
       );
+      console.log(`⏱ resize: ${Date.now() - t0}ms`);
+
       setStatus('מנתח טקסט...');
+      const t1 = Date.now();
       const { paragraphs, language } = await extractParagraphs(manipulated.base64 || '');
+      console.log(`⏱ gemini: ${Date.now() - t1}ms`);
+      console.log(`⏱ total to board: ${Date.now() - t0}ms`);
+
       if (paragraphs.length === 0) {
         Alert.alert('לא נמצא טקסט', 'לא זוהה טקסט בתמונה. נסה שוב.');
         return;
       }
+      const cacheId = Date.now().toString();
       setDone(true);
       await new Promise(r => setTimeout(r, 400));
-      onParagraphsReady(paragraphs, manipulated.uri, language, undefined, manipulated.uri);
+      // Открываем экран — кэш готовим полностью в фоне
+      onParagraphsReady(paragraphs, manipulated.uri, language, cacheId);
+      Promise.all([
+        prepareThumb(manipulated.uri),
+        prepareFullImage(manipulated.uri),
+      ]).then(([thumbBase64, imageBase64]) =>
+        saveToCache(cacheId, { thumbBase64, imageBase64 }, paragraphs, language)
+      ).catch(console.warn);
     } catch (e: any) {
       Alert.alert('שגיאה', e.message || 'אירעה שגיאה. נסה שוב.');
     } finally {

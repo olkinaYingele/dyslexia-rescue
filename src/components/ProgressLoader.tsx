@@ -8,10 +8,8 @@ interface Props {
 
 const STAGES = [
   { at: 0,  label: 'מכין תמונה...' },
-  { at: 15, label: 'שולח לניתוח...' },
-  { at: 30, label: 'מזהה טקסט...' },
-  { at: 55, label: 'מזהה פסקאות...' },
-  { at: 75, label: 'כמעט מוכן...' },
+  { at: 25, label: 'מנתח טקסט...' },
+  { at: 65, label: 'כמעט מוכן...' },
 ];
 
 export default function ProgressLoader({ status, done = false }: Props) {
@@ -20,10 +18,10 @@ export default function ProgressLoader({ status, done = false }: Props) {
   const [label, setLabel] = useState(STAGES[0].label);
 
   useEffect(() => {
-    // Animate to 85% over 22 seconds (realistic API wait)
+    // Animate to 85% over 8 seconds
     const anim = Animated.timing(progress, {
       toValue: 85,
-      duration: 22000,
+      duration: 8000,
       useNativeDriver: false,
     });
     anim.start();

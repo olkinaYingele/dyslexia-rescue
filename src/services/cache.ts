@@ -26,29 +26,42 @@ function extractTitle(paragraphs: Paragraph[]): string {
   return `${first} ${second}`;
 }
 
+export interface CacheImages {
+  thumbBase64: string;
+  imageBase64: string;
+}
+
+// 500px — для просмотра в BoardScreen, готовим параллельно с Gemini
+export async function prepareFullImage(imageUri: string): Promise<string> {
+  const result = await ImageManipulator.manipulateAsync(
+    imageUri,
+    [{ resize: { width: 500 } }],
+    { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+  );
+  return result.base64 || '';
+}
+
+// 120px — миниатюра для галереи, готовим в фоне после открытия экрана
+export async function prepareThumb(imageUri: string): Promise<string> {
+  const result = await ImageManipulator.manipulateAsync(
+    imageUri,
+    [{ resize: { width: 120 } }],
+    { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+  );
+  return result.base64 || '';
+}
+
 export async function saveToCache(
-  imageUri: string,
+  id: string,
+  images: CacheImages,
   paragraphs: Paragraph[],
   language: string = 'he'
 ): Promise<void> {
   try {
-    const [thumb, full] = await Promise.all([
-      ImageManipulator.manipulateAsync(
-        imageUri,
-        [{ resize: { width: 120 } }],
-        { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
-      ),
-      ImageManipulator.manipulateAsync(
-        imageUri,
-        [{ resize: { width: 500 } }],
-        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: true }
-      ),
-    ]);
-
     const newItem: CachedScreen = {
-      id: Date.now().toString(),
-      thumbBase64: thumb.base64 || '',
-      imageBase64: full.base64 || '',
+      id,
+      thumbBase64: images.thumbBase64,
+      imageBase64: images.imageBase64,
       paragraphs,
       timestamp: Date.now(),
       language,
