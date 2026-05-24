@@ -26,10 +26,12 @@ interface Props {
 function getDayLabel(dateKey: string): string {
   const today = getDayKey(Date.now());
   const yesterday = getDayKey(Date.now() - 86400000);
-  if (dateKey === today) return 'היום';
-  if (dateKey === yesterday) return 'אתמול';
   const d = new Date(dateKey);
-  return d.toLocaleDateString('he-IL', { day: 'numeric', month: 'long' });
+  const shortDate = d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' });
+  const weekday = d.toLocaleDateString('he-IL', { weekday: 'long' });
+  if (dateKey === today) return `היום, ${shortDate}, ${weekday}`;
+  if (dateKey === yesterday) return `אתמול, ${shortDate}, ${weekday}`;
+  return `${shortDate}, ${weekday}`;
 }
 
 function groupByDay(items: CachedScreen[]): DayGroup[] {

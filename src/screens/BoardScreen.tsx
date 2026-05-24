@@ -42,7 +42,9 @@ function parseWords(text: string): { words: string[]; lineBreaks: Set<number> } 
 
 function formatTimestamp(ts?: number): string {
   const d = new Date(ts || Date.now());
-  return d.toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' });
+  const date = d.toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' });
+  const time = d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+  return `${date}, ${time}`;
 }
 
 function getDistance(touches: any[]): number {
