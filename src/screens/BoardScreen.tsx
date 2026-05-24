@@ -40,6 +40,109 @@ function parseWords(text: string): { words: string[]; lineBreaks: Set<number> } 
   return { words, lineBreaks };
 }
 
+// Словарь распространённых ивритских сокращений
+const HEBREW_ABBREV: Record<string, string> = {
+  // כללי
+  'ד״ר': 'דוקטור',
+  'פרופ׳': 'פרופסור',
+  'עו״ד': 'עורך דין',
+  'רו״ח': 'רואה חשבון',
+  'מנכ״ל': 'מנהל כללי',
+  'סמנכ״ל': 'סגן מנהל כללי',
+  'מזכ״ל': 'מזכיר כללי',
+  'יו״ר': 'יושב ראש',
+  'ח״כ': 'חבר כנסת',
+  'רה״מ': 'ראש הממשלה',
+  'מ״מ': 'ממלא מקום',
+  // בתי ספר
+  'ביה״ס': 'בית הספר',
+  'בי״ס': 'בית ספר',
+  'חט״ב': 'חטיבת ביניים',
+  'חט״ע': 'חטיבה עליונה',
+  'מל״ג': 'המועצה להשכלה גבוהה',
+  // מקומות
+  'ת״א': 'תל אביב',
+  'י״ם': 'ירושלים',
+  'ירו׳': 'ירושלים',
+  'ר״ג': 'רמת גן',
+  'ראשל״צ': 'ראשון לציון',
+  'פ״ת': 'פתח תקווה',
+  'כפ״ס': 'כפר סבא',
+  'ב״ש': 'באר שבע',
+  'ב״ב': 'בני ברק',
+  'ק״ג': 'קריית גת',
+  'ק״ש': 'קריית שמונה',
+  // מוסדות ומסמכים
+  'ת״ז': 'תעודת זהות',
+  'מס׳': 'מספר',
+  'טל׳': 'טלפון',
+  'רח׳': 'רחוב',
+  'דוא״ל': 'דואר אלקטרוני',
+  'קופ״ח': 'קופת חולים',
+  'בי״ח': 'בית חולים',
+  'מד״א': 'מגן דוד אדום',
+  'עו״ס': 'עובד סוציאלי',
+  'בטל״א': 'ביטוח לאומי',
+  'מע״מ': 'מס ערך מוסף',
+  'צה״ל': 'צבא ההגנה לישראל',
+  'ארה״ב': 'ארצות הברית',
+  'בג״ץ': 'בית משפט גבוה לצדק',
+  'שב״כ': 'שירות ביטחון כללי',
+  // ימים וזמן
+  'יום א׳': 'יום ראשון',
+  'יום ב׳': 'יום שני',
+  'יום ג׳': 'יום שלישי',
+  'יום ד׳': 'יום רביעי',
+  'יום ה׳': 'יום חמישי',
+  'יום ו׳': 'יום שישי',
+  'מוצ״ש': 'מוצאי שבת',
+  'לפנה״צ': 'לפני הצהריים',
+  'אחה״צ': 'אחר הצהריים',
+  // התכתבות וטקסטים
+  'ע״י': 'על ידי',
+  'ע״פ': 'על פי',
+  'אע״פ': 'אף על פי',
+  'בד״כ': 'בדרך כלל',
+  'אח״כ': 'אחר כך',
+  'אחכ': 'אחר כך',
+  'כ״כ': 'כל כך',
+  'וכו׳': 'וכולי',
+  'לדוג׳': 'לדוגמה',
+  'כלו׳': 'כלומר',
+  'עמ׳': 'עמוד',
+  'נ״ב': 'נזכרתי בסוף',
+  'הנ״ל': 'הנזכר לעיל',
+  'מצ״ב': 'מצורף בזה',
+  'בע״ה': 'בעזרת השם',
+  'אי״ה': 'אם ירצה השם',
+  'ז״ל': 'זכרונו לברכה',
+  'זצ״ל': 'זכר צדיק לברכה',
+  'שליט״א': 'שיחיה לאורך ימים טובים אמן',
+  // שונות
+  'א״י': 'ארץ ישראל',
+  'ד״ש': 'דרישת שלום',
+  'ת״ת': 'תלמוד תורה',
+  'פ׳': 'פרק',
+  'ח׳': 'חודש',
+  'ש׳': 'שנה',
+  'כ״ד': 'כבוד',
+};
+
+// Убирает символы, которые iOS TTS читает как мусор
+function cleanForSpeech(text: string): string {
+  // 0. Нормализуем все виды кавычек к единому символу ״ для работы со словарём
+  let result = text.replace(/["""]/g, '״').replace(/[''']/g, '׳');
+  // 1. Раскрываем известные сокращения
+  for (const [abbrev, expansion] of Object.entries(HEBREW_ABBREV)) {
+    result = result.replaceAll(abbrev, expansion);
+  }
+  // 2. Неизвестные сокращения с ״ — заменяем на пробел, чтобы буквы читались отдельно
+  result = result.replace(/([א-ת])״([א-ת])/g, '$1 $2');
+  // 3. Остальные кавычки убираем
+  result = result.replace(/[״׳«»`]/g, '');
+  return result.replace(/\s{2,}/g, ' ').trim();
+}
+
 // Определяет язык слова по скрипту его букв.
 // prevLang — язык предыдущего слова, для наследования цифрами/пунктуацией.
 function detectWordLang(word: string, prevLang: string | null, docLanguage: string): string {
@@ -250,7 +353,8 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
     setCurrentWordIndex(0);
     setIsPlaying(true);
 
-    const segments = splitByLanguage(p.text, language);
+    const cleanedText = cleanForSpeech(p.text);
+    const segments = splitByLanguage(cleanedText, language);
 
     const speakSegment = (index: number, offset: number) => {
       if (index >= segments.length) {
@@ -264,7 +368,7 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
         rate: 0.85,
         onBoundary: (event) => {
           const absChar = offset + event.charIndex;
-          const upToChar = p.text.slice(0, absChar);
+          const upToChar = cleanedText.slice(0, absChar);
           const wordsBefore = upToChar.trim().split(/\s+/).filter(w => w.length > 0);
           setCurrentWordIndex(wordsBefore.length);
         },
