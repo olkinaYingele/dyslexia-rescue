@@ -6,10 +6,13 @@ import {
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { extractParagraphs, Paragraph } from '../services/claude';
 import { saveToCache, prepareFullImage, prepareThumb, loadCache, deleteFromCache, deleteDayFromCache, getDayKey, CachedScreen } from '../services/cache';
 import ProgressLoader from '../components/ProgressLoader';
 import { UiLang, UI } from '../i18n';
+
+const ONBOARDING_KEY = 'onboarding_seen_v1';
 
 const { width } = Dimensions.get('window');
 const THUMB_SIZE = (width - 48) / 2;
@@ -67,6 +70,7 @@ export default function HomeScreen({ onParagraphsReady, uiLang, setUiLang }: Pro
   const [done, setDone] = useState(false);
   const [recent, setRecent] = useState<CachedScreen[]>([]);
   const [deleteDayModal, setDeleteDayModal] = useState<DayGroup | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const showError = (title: string, message: string) => Alert.alert(title, message);
@@ -80,6 +84,15 @@ export default function HomeScreen({ onParagraphsReady, uiLang, setUiLang }: Pro
   }, []);
 
   useEffect(() => { refreshCache(); }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem(ONBOARDING_KEY).then(v => { if (!v) setShowOnboarding(true); });
+  }, []);
+
+  const closeOnboarding = async () => {
+    setShowOnboarding(false);
+    await AsyncStorage.setItem(ONBOARDING_KEY, '1');
+  };
 
   const processImage = async (uri: string) => {
     const t0 = Date.now();
@@ -236,6 +249,14 @@ export default function HomeScreen({ onParagraphsReady, uiLang, setUiLang }: Pro
         <Text style={styles.feedbackText}>{t.feedback}</Text>
       </TouchableOpacity>
 
+      {/* Empty state */}
+      {dayGroups.length === 0 && (
+        <View style={styles.emptyState}>
+          <Feather name="camera" size={48} color="#C2C7CF" />
+          <Text style={styles.emptyText}>{t.emptyHint}</Text>
+        </View>
+      )}
+
       {/* Archive grouped by day */}
       {dayGroups.length > 0 && (
         <ScrollView style={styles.recentSection} showsVerticalScrollIndicator={false}>
@@ -291,6 +312,37 @@ export default function HomeScreen({ onParagraphsReady, uiLang, setUiLang }: Pro
           <View style={{ height: 24 }} />
         </ScrollView>
       )}
+
+      {/* Onboarding modal */}
+      <Modal visible={showOnboarding} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { alignItems: 'center', width: 320 }]}>
+            <Text style={[styles.modalTitle, { textAlign: 'center', fontSize: 24, marginBottom: 20 }]}>
+              {t.onboardingTitle}
+            </Text>
+
+            <View style={styles.onbStep}>
+              <Text style={styles.onbEmoji}>📸</Text>
+              <Text style={styles.onbText}>{t.onboardingStep1}</Text>
+            </View>
+            <View style={styles.onbStep}>
+              <Text style={styles.onbEmoji}>👆</Text>
+              <Text style={styles.onbText}>{t.onboardingStep2}</Text>
+            </View>
+            <View style={styles.onbStep}>
+              <Text style={styles.onbEmoji}>🔊</Text>
+              <Text style={styles.onbText}>{t.onboardingStep3}</Text>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.modalBtn, styles.modalBtnDelete, { alignSelf: 'stretch', marginTop: 12 }]}
+              onPress={closeOnboarding}
+            >
+              <Text style={styles.modalBtnDeleteText}>{t.onboardingBtn}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Delete day confirmation modal */}
       <Modal visible={!!deleteDayModal} transparent animationType="fade">
@@ -407,6 +459,40 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Fredoka-Regular',
     color: '#72777F',
+  },
+
+  // Empty state
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 40,
+    gap: 16,
+    marginTop: -60,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontFamily: 'Fredoka-Regular',
+    color: '#72777F',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+
+  // Onboarding
+  onbStep: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 10,
+    alignSelf: 'stretch',
+  },
+  onbEmoji: { fontSize: 28 },
+  onbText: {
+    flex: 1,
+    fontSize: 16,
+    fontFamily: 'Fredoka-Regular',
+    color: '#181C20',
+    lineHeight: 22,
   },
 
   // Archive
