@@ -19,6 +19,8 @@ export const UI = {
     errGeneral:     ['Error',               'Try again']                          as [string, string],
     errNoCamera:    ['No camera access',    'Allow access in Settings']           as [string, string],
     errNoGallery:   ['No gallery access',   'Allow access in Settings']           as [string, string],
+    feedback: 'Send feedback',
+    feedbackMsg: 'Reader – feedback: ',
     langToggle: 'עב',
   },
   he: {
@@ -39,6 +41,8 @@ export const UI = {
     errGeneral:     ['שגיאה',              'נסה שוב']                 as [string, string],
     errNoCamera:    ['אין גישה למצלמה',   'יש לאפשר בהגדרות']        as [string, string],
     errNoGallery:   ['אין גישה לגלריה',   'יש לאפשר בהגדרות']        as [string, string],
+    feedback: 'שלח משוב',
+    feedbackMsg: 'מקריא – משוב: ',
     langToggle: 'EN',
   },
 };

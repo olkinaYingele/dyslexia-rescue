@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Alert,
+  View, Text, TouchableOpacity, StyleSheet, Alert, Linking,
   SafeAreaView, ScrollView, Image, Dimensions, Modal,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
@@ -161,6 +161,12 @@ export default function HomeScreen({ onParagraphsReady, uiLang, setUiLang }: Pro
     if (!result.canceled) await processImage(result.assets[0].uri);
   };
 
+  const sendFeedback = () => {
+    const phone = '972455525954';
+    const text = encodeURIComponent(t.feedbackMsg);
+    Linking.openURL(`whatsapp://send?phone=${phone}&text=${text}`);
+  };
+
   const openCached = (item: CachedScreen) => {
     onParagraphsReady(item.paragraphs, `data:image/jpeg;base64,${item.imageBase64}`, item.language || 'he', item.id);
   };
@@ -223,6 +229,12 @@ export default function HomeScreen({ onParagraphsReady, uiLang, setUiLang }: Pro
           <Text style={styles.btnText}>{t.gallery}</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Feedback */}
+      <TouchableOpacity style={styles.feedbackBtn} onPress={sendFeedback} activeOpacity={0.7}>
+        <Feather name="message-circle" size={14} color="#72777F" />
+        <Text style={styles.feedbackText}>{t.feedback}</Text>
+      </TouchableOpacity>
 
       {/* Archive grouped by day */}
       {dayGroups.length > 0 && (
@@ -380,6 +392,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Fredoka-Medium',
     color: '#FFFFFF',
+  },
+
+  // Feedback
+  feedbackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+  feedbackText: {
+    fontSize: 13,
+    fontFamily: 'Fredoka-Regular',
+    color: '#72777F',
   },
 
   // Archive
