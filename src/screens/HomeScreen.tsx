@@ -9,6 +9,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { extractParagraphs, Paragraph } from '../services/claude';
 import { saveToCache, prepareFullImage, prepareThumb, loadCache, deleteFromCache, deleteDayFromCache, getDayKey, CachedScreen } from '../services/cache';
 import ProgressLoader from '../components/ProgressLoader';
+import { UiLang, UI } from '../i18n';
 
 const { width } = Dimensions.get('window');
 const THUMB_SIZE = (width - 48) / 2;
@@ -20,21 +21,25 @@ interface DayGroup {
 }
 
 interface Props {
-  onParagraphsReady: (paragraphs: Paragraph[], imageUri: string, language: string, cacheId?: string, originalUri?: string) => void;
+  onParagraphsReady: (paragraphs: Paragraph[], imageUri: string, language: string, cacheId?: string) => void;
+  uiLang: UiLang;
+  setUiLang: (lang: UiLang) => void;
 }
 
-function getDayLabel(dateKey: string): string {
+function getDayLabel(dateKey: string, uiLang: UiLang): string {
   const today = getDayKey(Date.now());
   const yesterday = getDayKey(Date.now() - 86400000);
+  const t = UI[uiLang];
   const d = new Date(dateKey);
-  const shortDate = d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' });
-  const weekday = d.toLocaleDateString('he-IL', { weekday: 'long' });
-  if (dateKey === today) return `היום, ${shortDate}, ${weekday}`;
-  if (dateKey === yesterday) return `אתמול, ${shortDate}, ${weekday}`;
+  const locale = uiLang === 'en' ? 'en-US' : 'he-IL';
+  const shortDate = d.toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
+  const weekday = d.toLocaleDateString(locale, { weekday: 'long' });
+  if (dateKey === today) return `${t.today}, ${shortDate}, ${weekday}`;
+  if (dateKey === yesterday) return `${t.yesterday}, ${shortDate}, ${weekday}`;
   return `${shortDate}, ${weekday}`;
 }
 
-function groupByDay(items: CachedScreen[]): DayGroup[] {
+function groupByDay(items: CachedScreen[], uiLang: UiLang): DayGroup[] {
   const map = new Map<string, CachedScreen[]>();
   for (const item of items) {
     const key = getDayKey(item.timestamp);
@@ -43,7 +48,7 @@ function groupByDay(items: CachedScreen[]): DayGroup[] {
   }
   return Array.from(map.entries()).map(([dateKey, dayItems]) => ({
     dateKey,
-    label: getDayLabel(dateKey),
+    label: getDayLabel(dateKey, uiLang),
     items: dayItems,
   }));
 }
@@ -54,7 +59,9 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
   return chunks;
 }
 
-export default function HomeScreen({ onParagraphsReady }: Props) {
+export default function HomeScreen({ onParagraphsReady, uiLang, setUiLang }: Props) {
+  const t = UI[uiLang];
+  const uiRTL = uiLang === 'he';
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
   const [done, setDone] = useState(false);
@@ -103,7 +110,7 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
       console.log(`⏱ total to board: ${Date.now() - t0}ms`);
 
       if (paragraphs.length === 0) {
-        showError('לא נמצא טקסט', 'נסה לצלם שוב');
+        showError(...t.errNoText);
         return;
       }
       const cacheId = Date.now().toString();
@@ -121,11 +128,11 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
       if (e.name === 'AbortError') return;
       console.warn('[processImage] Error:', e);
       if (e.message === 'NO_INTERNET') {
-        showError('אין אינטרנט', 'בדוק את החיבור ונסה שוב');
+        showError(...t.errNoInternet);
       } else if (e.message === 'EMPTY_RESPONSE') {
-        showError('לא נמצא טקסט', 'נסה לצלם שוב');
+        showError(...t.errNoText);
       } else {
-        showError('שגיאה', 'נסה שוב');
+        showError(...t.errGeneral);
       }
     } finally {
       abortRef.current = null;
@@ -137,7 +144,7 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      showError('אין גישה למצלמה', 'יש לאפשר בהגדרות');
+      showError(...t.errNoCamera);
       return;
     }
     const result = await ImagePicker.launchCameraAsync({ quality: 1 });
@@ -147,7 +154,7 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
   const pickFromGallery = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      showError('אין גישה לגלריה', 'יש לאפשר בהגדרות');
+      showError(...t.errNoGallery);
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ quality: 1 });
@@ -176,25 +183,44 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
     );
   }
 
-  const dayGroups = groupByDay(recent);
+  const dayGroups = groupByDay(recent, uiLang);
 
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>מקריא</Text>
-        <Text style={styles.subtitle}>צלם • האזן • הבן</Text>
+        {uiRTL ? (
+          <>
+            <TouchableOpacity style={styles.langBtn} onPress={() => setUiLang('en')}>
+              <Text style={styles.langBtnText}>{t.langToggle}</Text>
+            </TouchableOpacity>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={styles.title}>{t.appTitle}</Text>
+              <Text style={styles.subtitle}>{t.appSubtitle}</Text>
+            </View>
+          </>
+        ) : (
+          <>
+            <View style={{ alignItems: 'flex-start' }}>
+              <Text style={styles.title}>{t.appTitle}</Text>
+              <Text style={styles.subtitle}>{t.appSubtitle}</Text>
+            </View>
+            <TouchableOpacity style={styles.langBtn} onPress={() => setUiLang('he')}>
+              <Text style={styles.langBtnText}>{t.langToggle}</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
 
       {/* Action buttons */}
       <View style={styles.buttons}>
         <TouchableOpacity style={styles.btn} onPress={takePhoto} activeOpacity={0.85}>
           <Feather name="camera" size={20} color="#FFFFFF" />
-          <Text style={styles.btnText}>מצלמה</Text>
+          <Text style={styles.btnText}>{t.camera}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.btn} onPress={pickFromGallery} activeOpacity={0.85}>
           <Feather name="image" size={20} color="#FFFFFF" />
-          <Text style={styles.btnText}>גלריה</Text>
+          <Text style={styles.btnText}>{t.gallery}</Text>
         </TouchableOpacity>
       </View>
 
@@ -205,14 +231,21 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
             <View key={group.dateKey}>
               {/* Day header */}
               <View style={styles.dayHeader}>
-                <TouchableOpacity
-                  style={styles.dayDeleteBtn}
-                  onPress={() => setDeleteDayModal(group)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Feather name="trash-2" size={15} color="#72777F" />
-                </TouchableOpacity>
-                <Text style={styles.dayLabel}>{group.label}</Text>
+                {uiRTL ? (
+                  <>
+                    <TouchableOpacity style={styles.dayDeleteBtn} onPress={() => setDeleteDayModal(group)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Feather name="trash-2" size={15} color="#72777F" />
+                    </TouchableOpacity>
+                    <Text style={[styles.dayLabel, { textAlign: 'right' }]}>{group.label}</Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={[styles.dayLabel, { textAlign: 'left' }]}>{group.label}</Text>
+                    <TouchableOpacity style={styles.dayDeleteBtn} onPress={() => setDeleteDayModal(group)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Feather name="trash-2" size={15} color="#72777F" />
+                    </TouchableOpacity>
+                  </>
+                )}
               </View>
 
               {/* Grid rows of 2 */}
@@ -231,9 +264,9 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
                       />
                       <View style={styles.gridFooter}>
                         {item.title ? (
-                          <Text style={styles.gridTitle} numberOfLines={1}>{item.title}</Text>
+                          <Text style={[styles.gridTitle, uiRTL ? null : { textAlign: 'left' }]} numberOfLines={1}>{item.title}</Text>
                         ) : null}
-                        <Text style={styles.gridDate}>{formatTime(item.timestamp)}</Text>
+                        <Text style={[styles.gridDate, uiRTL ? null : { textAlign: 'left' }]}>{formatTime(item.timestamp)}</Text>
                       </View>
                     </TouchableOpacity>
                   ))}
@@ -250,23 +283,23 @@ export default function HomeScreen({ onParagraphsReady }: Props) {
       {/* Delete day confirmation modal */}
       <Modal visible={!!deleteDayModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>מחיקת יום</Text>
-            <Text style={styles.modalMessage}>
-              למחוק את כל התמונות מ{deleteDayModal?.label}?{'\n'}({deleteDayModal?.items.length} תמונות)
+          <View style={[styles.modalCard, uiRTL ? null : { alignItems: 'flex-start' }]}>
+            <Text style={[styles.modalTitle, uiRTL ? null : { textAlign: 'left' }]}>{t.deleteDayTitle}</Text>
+            <Text style={[styles.modalMessage, uiRTL ? null : { textAlign: 'left' }]}>
+              {t.deleteDayMsg(deleteDayModal?.label || '', deleteDayModal?.items.length || 0)}
             </Text>
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalBtn, styles.modalBtnCancel]}
                 onPress={() => setDeleteDayModal(null)}
               >
-                <Text style={styles.modalBtnCancelText}>ביטול</Text>
+                <Text style={styles.modalBtnCancelText}>{t.cancel}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalBtn, styles.modalBtnDelete]}
                 onPress={() => deleteDayModal && confirmDeleteDay(deleteDayModal)}
               >
-                <Text style={styles.modalBtnDeleteText}>מחק</Text>
+                <Text style={styles.modalBtnDeleteText}>{t.delete}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -287,10 +320,25 @@ const styles = StyleSheet.create({
 
   // Header
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     paddingHorizontal: 24,
     paddingTop: 20,
     paddingBottom: 8,
-    alignItems: 'flex-end',
+  },
+  langBtn: {
+    marginTop: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#C2C7CF',
+  },
+  langBtnText: {
+    fontSize: 13,
+    fontFamily: 'Fredoka-Medium',
+    color: '#51606F',
   },
   title: {
     fontSize: 40,

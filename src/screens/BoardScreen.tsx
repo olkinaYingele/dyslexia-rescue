@@ -15,6 +15,7 @@ import {
 import * as Speech from 'expo-speech';
 import { Feather } from '@expo/vector-icons';
 import { Paragraph } from '../services/claude';
+import { UiLang, UI } from '../i18n';
 
 interface Props {
   imageUri: string;
@@ -24,6 +25,7 @@ interface Props {
   timestamp?: number;
   onExit: () => void;
   onDelete: () => void;
+  uiLang: UiLang;
 }
 
 const COLORS = ['#2F628C', '#51606F', '#68587A', '#0F4A73', '#3A4857', '#504061', '#245882', '#42474E'];
@@ -184,10 +186,11 @@ function splitByLanguage(text: string, docLanguage: string): { text: string; lan
   return segments.length > 0 ? segments : [{ text, lang: docLanguage }];
 }
 
-function formatTimestamp(ts?: number): string {
+function formatTimestamp(ts?: number, uiLang: UiLang = 'en'): string {
   const d = new Date(ts || Date.now());
-  const date = d.toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' });
-  const time = d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+  const locale = uiLang === 'en' ? 'en-US' : 'he-IL';
+  const date = d.toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' });
+  const time = d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
   return `${date}, ${time}`;
 }
 
@@ -197,7 +200,9 @@ function getDistance(touches: any[]): number {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
-export default function BoardScreen({ imageUri, paragraphs, language, isCached, timestamp, onExit, onDelete }: Props) {
+export default function BoardScreen({ imageUri, paragraphs, language, isCached, timestamp, onExit, onDelete, uiLang }: Props) {
+  const t = UI[uiLang];
+  const uiRTL = uiLang === 'he';
   const [imageLayout, setImageLayout] = useState<{ width: number; height: number } | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(null);
   const [activeParagraph, setActiveParagraph] = useState<Paragraph | null>(null);
@@ -410,7 +415,7 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
           <Feather name="arrow-left" size={22} color="#1C1C1E" />
         </TouchableOpacity>
 
-        <Text style={styles.dateText}>{formatTimestamp(timestamp)}</Text>
+        <Text style={styles.dateText}>{formatTimestamp(timestamp, uiLang)}</Text>
 
         <TouchableOpacity style={styles.headerBtn} onPress={() => setShowDeleteModal(true)}>
           <Feather name="trash-2" size={20} color="#72777F" />
@@ -494,21 +499,21 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
       {/* Delete confirmation modal */}
       <Modal visible={showDeleteModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>מחיקה</Text>
-            <Text style={styles.modalMessage}>למחוק תמונה זו?</Text>
+          <View style={[styles.modalCard, uiRTL ? null : { alignItems: 'flex-start' }]}>
+            <Text style={[styles.modalTitle, uiRTL ? null : { textAlign: 'left' }]}>{t.deleteImageTitle}</Text>
+            <Text style={[styles.modalMessage, uiRTL ? null : { textAlign: 'left' }]}>{t.deleteImageMsg}</Text>
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalBtn, styles.modalBtnCancel]}
                 onPress={() => setShowDeleteModal(false)}
               >
-                <Text style={styles.modalBtnCancelText}>ביטול</Text>
+                <Text style={styles.modalBtnCancelText}>{t.cancel}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalBtn, styles.modalBtnDelete]}
                 onPress={() => { setShowDeleteModal(false); stopReading(); onDelete(); }}
               >
-                <Text style={styles.modalBtnDeleteText}>מחק</Text>
+                <Text style={styles.modalBtnDeleteText}>{t.delete}</Text>
               </TouchableOpacity>
             </View>
           </View>

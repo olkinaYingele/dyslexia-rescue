@@ -6,6 +6,7 @@ import HomeScreen from './src/screens/HomeScreen';
 import BoardScreen from './src/screens/BoardScreen';
 import { Paragraph } from './src/services/claude';
 import { deleteFromCache } from './src/services/cache';
+import { UiLang } from './src/i18n';
 
 type Screen = 'home' | 'board';
 
@@ -47,6 +48,7 @@ export default function App() {
   const [language, setLanguage] = useState('he');
   const [timestamp, setTimestamp] = useState<number>(Date.now());
   const [currentCacheId, setCurrentCacheId] = useState<string | null>(null);
+  const [uiLang, setUiLang] = useState<UiLang>('en');
 
   const [fontsLoaded] = useFonts({
     'Fredoka-Regular':  require('./assets/fonts/Fredoka-Regular.ttf'),
@@ -73,7 +75,6 @@ export default function App() {
 
   const handleDelete = async () => {
     if (currentCacheId) await deleteFromCache(currentCacheId);
-    setUnsavedUri(null);
     setCurrentCacheId(null);
     setScreen('home');
   };
@@ -84,7 +85,7 @@ export default function App() {
     <PaperProvider theme={theme}>
       <StatusBar style="dark" />
       {screen === 'home' && (
-        <HomeScreen onParagraphsReady={handleParagraphsReady} />
+        <HomeScreen onParagraphsReady={handleParagraphsReady} uiLang={uiLang} setUiLang={setUiLang} />
       )}
       {screen === 'board' && (
         <BoardScreen
@@ -95,6 +96,7 @@ export default function App() {
           timestamp={timestamp}
           onExit={handleExit}
           onDelete={handleDelete}
+          uiLang={uiLang}
         />
       )}
     </PaperProvider>
