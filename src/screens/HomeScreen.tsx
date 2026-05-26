@@ -335,10 +335,11 @@ export default function HomeScreen({ onParagraphsReady, uiLang, setUiLang }: Pro
             </View>
 
             <TouchableOpacity
-              style={[styles.modalBtn, styles.modalBtnDelete, { alignSelf: 'stretch', marginTop: 12 }]}
+              style={styles.onbBtn}
               onPress={closeOnboarding}
+              activeOpacity={0.85}
             >
-              <Text style={{ fontSize: 17, fontFamily: 'Fredoka-Medium', color: '#FFFFFF' }}>{t.onboardingBtn}</Text>
+              <Text style={styles.onbBtnText}>{t.onboardingBtn}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -493,6 +494,20 @@ const styles = StyleSheet.create({
     fontFamily: 'Fredoka-Regular',
     color: '#181C20',
     lineHeight: 22,
+  },
+  onbBtn: {
+    alignSelf: 'stretch',
+    marginTop: 16,
+    backgroundColor: '#2F628C',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  onbBtnText: {
+    fontSize: 17,
+    fontFamily: 'Fredoka-Medium',
+    color: '#FFFFFF',
   },
 
   // Archive
