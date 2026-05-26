@@ -411,11 +411,12 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.headerBtn} onPress={() => { stopReading(); onExit(); }}>
-          <Feather name="arrow-left" size={22} color="#1C1C1E" />
+        <TouchableOpacity style={styles.saveExitBtn} onPress={() => { stopReading(); onExit(); }} activeOpacity={0.7}>
+          <Feather name="arrow-left" size={18} color="#FFFFFF" />
+          <Text style={styles.saveExitText}>{t.saveExit}</Text>
         </TouchableOpacity>
 
-        <Text style={styles.dateText}>{formatTimestamp(timestamp, uiLang)}</Text>
+        <Text style={styles.dateText} numberOfLines={1}>{formatTimestamp(timestamp, uiLang)}</Text>
 
         <TouchableOpacity style={styles.headerBtn} onPress={() => setShowDeleteModal(true)}>
           <Feather name="trash-2" size={20} color="#72777F" />
@@ -535,10 +536,27 @@ const styles = StyleSheet.create({
     backgroundColor: '#F7F9FF',
   },
   headerBtn: { padding: 4 },
+  saveExitBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#2F628C',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  saveExitText: {
+    fontSize: 14,
+    fontFamily: 'Fredoka-Medium',
+    color: '#FFFFFF',
+  },
   dateText: {
-    fontSize: 13,
+    flex: 1,
+    fontSize: 12,
     fontFamily: 'Fredoka-Regular',
     color: '#72777F',
+    textAlign: 'center',
+    marginHorizontal: 8,
   },
 
   imageWrapper: {
