@@ -100,7 +100,7 @@ export default function HomeScreen({ onParagraphsReady, uiLang, setUiLang }: Pro
     abortRef.current = controller;
     setLoading(true);
     setDone(false);
-    setStatus('מכין תמונה...');
+    setStatus(t.loaderPrep);
     try {
       // Проход 1: фиксируем EXIF-ориентацию (запекаем поворот в пиксели)
       const oriented = await ImageManipulator.manipulateAsync(
@@ -116,7 +116,7 @@ export default function HomeScreen({ onParagraphsReady, uiLang, setUiLang }: Pro
       );
       console.log(`⏱ resize: ${Date.now() - t0}ms`);
 
-      setStatus('מנתח טקסט...');
+      setStatus(t.loaderAnalyze);
       const t1 = Date.now();
       const { paragraphs, language } = await extractParagraphs(manipulated.base64 || '', controller.signal);
       console.log(`⏱ gemini: ${Date.now() - t1}ms`);
@@ -197,7 +197,18 @@ export default function HomeScreen({ onParagraphsReady, uiLang, setUiLang }: Pro
   if (loading) {
     return (
       <SafeAreaView style={styles.loadingScreen}>
-        <ProgressLoader status={status} done={done} onCancel={handleCancel} />
+        <ProgressLoader
+          status={status}
+          done={done}
+          onCancel={handleCancel}
+          labels={{
+            prep: t.loaderPrep,
+            analyze: t.loaderAnalyze,
+            almost: t.loaderAlmost,
+            doneLabel: t.loaderDone,
+            cancel: t.cancel,
+          }}
+        />
       </SafeAreaView>
     );
   }

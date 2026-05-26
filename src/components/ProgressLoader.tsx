@@ -1,21 +1,29 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
 
+interface Labels {
+  prep: string;
+  analyze: string;
+  almost: string;
+  doneLabel: string;
+  cancel: string;
+}
+
 interface Props {
   status: string;
   done?: boolean;
   onCancel?: () => void;
+  labels: Labels;
 }
 
-const STAGES = [
-  { at: 0,  label: 'מכין תמונה...' },
-  { at: 25, label: 'מנתח טקסט...' },
-  { at: 65, label: 'כמעט מוכן...' },
-];
+export default function ProgressLoader({ status, done = false, onCancel, labels }: Props) {
+  const STAGES = [
+    { at: 0,  label: labels.prep },
+    { at: 25, label: labels.analyze },
+    { at: 65, label: labels.almost },
+  ];
 
-export default function ProgressLoader({ status, done = false, onCancel }: Props) {
   const progress = useRef(new Animated.Value(0)).current;
-  const labelAnim = useRef(new Animated.Value(1)).current;
   const labelRef = useRef(STAGES[0].label);
   const [label, setLabel] = React.useState(STAGES[0].label);
 
@@ -46,7 +54,7 @@ export default function ProgressLoader({ status, done = false, onCancel }: Props
         duration: 300,
         useNativeDriver: false,
       }).start();
-      setLabel('מוכן! ✓');
+      setLabel(labels.doneLabel);
     }
   }, [done]);
 
@@ -66,7 +74,7 @@ export default function ProgressLoader({ status, done = false, onCancel }: Props
 
       {!done && onCancel && (
         <TouchableOpacity style={styles.cancelBtn} onPress={onCancel} activeOpacity={0.7}>
-          <Text style={styles.cancelText}>ביטול</Text>
+          <Text style={styles.cancelText}>{labels.cancel}</Text>
         </TouchableOpacity>
       )}
     </View>

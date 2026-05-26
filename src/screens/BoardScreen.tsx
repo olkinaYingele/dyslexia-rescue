@@ -411,10 +411,16 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.saveExitBtn} onPress={() => { stopReading(); onExit(); }} activeOpacity={0.7}>
-          <Feather name="arrow-left" size={18} color="#FFFFFF" />
-          <Text style={styles.saveExitText}>{t.saveExit}</Text>
-        </TouchableOpacity>
+        {isCached ? (
+          <TouchableOpacity style={styles.headerBtn} onPress={() => { stopReading(); onExit(); }}>
+            <Feather name="arrow-left" size={22} color="#1C1C1E" />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={styles.saveExitBtn} onPress={() => { stopReading(); onExit(); }} activeOpacity={0.7}>
+            <Feather name="arrow-left" size={18} color="#FFFFFF" />
+            <Text style={styles.saveExitText}>{t.saveExit}</Text>
+          </TouchableOpacity>
+        )}
 
         <Text style={styles.dateText} numberOfLines={1}>{formatTimestamp(timestamp, uiLang)}</Text>
 
