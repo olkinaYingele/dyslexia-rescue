@@ -338,7 +338,7 @@ export default function HomeScreen({ onParagraphsReady, uiLang, setUiLang }: Pro
               style={[styles.modalBtn, styles.modalBtnDelete, { alignSelf: 'stretch', marginTop: 12 }]}
               onPress={closeOnboarding}
             >
-              <Text style={styles.modalBtnDeleteText}>{t.onboardingBtn}</Text>
+              <Text style={{ fontSize: 17, fontFamily: 'Fredoka-Medium', color: '#FFFFFF' }}>{t.onboardingBtn}</Text>
             </TouchableOpacity>
           </View>
         </View>
