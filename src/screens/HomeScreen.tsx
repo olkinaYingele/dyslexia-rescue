@@ -162,7 +162,7 @@ export default function HomeScreen({ onParagraphsReady, uiLang, setUiLang }: Pro
   };
 
   const sendFeedback = () => {
-    const phone = '972455525954';
+    const phone = '972544525954';
     const text = encodeURIComponent(t.feedbackMsg);
     Linking.openURL(`whatsapp://send?phone=${phone}&text=${text}`);
   };
