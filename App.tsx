@@ -48,6 +48,7 @@ export default function App() {
   const [language, setLanguage] = useState('he');
   const [timestamp, setTimestamp] = useState<number>(Date.now());
   const [currentCacheId, setCurrentCacheId] = useState<string | null>(null);
+  const [isFromArchive, setIsFromArchive] = useState(false);
   const [uiLang, setUiLang] = useState<UiLang>('en');
 
   const [fontsLoaded] = useFonts({
@@ -58,13 +59,14 @@ export default function App() {
   });
 
   const handleParagraphsReady = (
-    p: Paragraph[], uri: string, lang: string, cacheId?: string
+    p: Paragraph[], uri: string, lang: string, cacheId?: string, fromArchive: boolean = false
   ) => {
     setParagraphs(p);
     setImageUri(uri);
     setLanguage(lang);
     setTimestamp(Date.now());
     setCurrentCacheId(cacheId || null);
+    setIsFromArchive(fromArchive);
     setScreen('board');
   };
 
@@ -92,7 +94,7 @@ export default function App() {
           imageUri={imageUri}
           paragraphs={paragraphs}
           language={language}
-          isCached={!!currentCacheId}
+          isCached={isFromArchive}
           timestamp={timestamp}
           onExit={handleExit}
           onDelete={handleDelete}

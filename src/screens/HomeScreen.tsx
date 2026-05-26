@@ -24,7 +24,7 @@ interface DayGroup {
 }
 
 interface Props {
-  onParagraphsReady: (paragraphs: Paragraph[], imageUri: string, language: string, cacheId?: string) => void;
+  onParagraphsReady: (paragraphs: Paragraph[], imageUri: string, language: string, cacheId?: string, fromArchive?: boolean) => void;
   uiLang: UiLang;
   setUiLang: (lang: UiLang) => void;
 }
@@ -181,7 +181,7 @@ export default function HomeScreen({ onParagraphsReady, uiLang, setUiLang }: Pro
   };
 
   const openCached = (item: CachedScreen) => {
-    onParagraphsReady(item.paragraphs, `data:image/jpeg;base64,${item.imageBase64}`, item.language || 'he', item.id);
+    onParagraphsReady(item.paragraphs, `data:image/jpeg;base64,${item.imageBase64}`, item.language || 'he', item.id, true);
   };
 
   const confirmDeleteDay = async (group: DayGroup) => {
