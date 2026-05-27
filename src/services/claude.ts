@@ -81,7 +81,10 @@ CRITICAL RULES — follow exactly:
 - If the image says "דמקה, שש בש, מטקות" — return exactly that. Never invent "משחקי קופסא" or any other generalization.
 - A heading + its lines = ONE paragraph. A list or schedule = ONE paragraph.
 - Detect the primary language of the document and return its ISO code (e.g. "he", "en", "ru", "de").
-- For EACH paragraph, return "segments": split the paragraph text by language. If the whole paragraph is one language, return ONE segment. If it mixes languages (e.g. Hebrew with English brand names, or German with English words), split at language boundaries. The concatenation of all segments' text MUST equal the paragraph text exactly.
+- For EACH paragraph, return "segments": split the paragraph text by language ONLY when there are actual foreign WORDS (real words from another language, like "WhatsApp" inside Hebrew text, or "deadline" inside German text).
+- DO NOT create a separate segment for: digits, numbers, times like "13:54", dates like "25.05.2024", percentages, prices, punctuation, emojis, or URLs. These ALWAYS inherit the surrounding language.
+- If the entire paragraph is in one language (with numbers/punctuation inside), return ONE segment covering the full text.
+- The concatenation of all segments' text MUST equal the paragraph text exactly, character by character including whitespace.
 - Use ISO 639-1 codes: 'he' (Hebrew), 'en' (English), 'ru' (Russian), 'de' (German), 'fr' (French), 'es' (Spanish), 'it' (Italian), 'ar' (Arabic), etc.
 - Return bounding box coordinates in 0–1000 scale (0 = top/left edge, 1000 = bottom/right edge).`;
 
