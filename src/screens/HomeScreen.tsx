@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Alert, Linking,
+  View, Text, TouchableOpacity, StyleSheet, Alert, Linking, Platform,
   SafeAreaView, ScrollView, Image, Dimensions, Modal,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
@@ -9,6 +9,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { extractParagraphs, Paragraph } from '../services/claude';
 import { saveToCache, prepareFullImage, prepareThumb, loadCache, deleteFromCache, deleteDayFromCache, getDayKey, CachedScreen } from '../services/cache';
+import { generateAllAudio, ParagraphAudio } from '../services/tts';
 import ProgressLoader from '../components/ProgressLoader';
 import { UiLang, UI } from '../i18n';
 
@@ -24,7 +25,7 @@ interface DayGroup {
 }
 
 interface Props {
-  onParagraphsReady: (paragraphs: Paragraph[], imageUri: string, language: string, cacheId?: string, fromArchive?: boolean) => void;
+  onParagraphsReady: (paragraphs: Paragraph[], imageUri: string, language: string, cacheId?: string, fromArchive?: boolean, audio?: ParagraphAudio[]) => void;
   uiLang: UiLang;
   setUiLang: (lang: UiLang) => void;
 }
@@ -127,15 +128,30 @@ export default function HomeScreen({ onParagraphsReady, uiLang, setUiLang }: Pro
         return;
       }
       const cacheId = Date.now().toString();
+
+      // На Android — генерируем TTS аудио параллельно для всех абзацев
+      let audio: ParagraphAudio[] | undefined;
+      if (Platform.OS === 'android') {
+        setStatus(t.loaderAudio);
+        const tTts = Date.now();
+        try {
+          audio = await generateAllAudio(paragraphs, cacheId);
+          console.log(`⏱ TTS: ${Date.now() - tTts}ms`);
+        } catch (e) {
+          console.warn('[TTS] Failed, continuing without audio:', e);
+          // Не блокируем — на крайний случай попробуем expo-speech как fallback
+        }
+      }
+
       setDone(true);
       await new Promise(r => setTimeout(r, 400));
-      // Открываем экран — кэш готовим полностью в фоне
-      onParagraphsReady(paragraphs, manipulated.uri, language, cacheId);
+      // Открываем экран — изображения для кэша готовим в фоне
+      onParagraphsReady(paragraphs, manipulated.uri, language, cacheId, false, audio);
       Promise.all([
         prepareThumb(manipulated.uri),
         prepareFullImage(manipulated.uri),
       ]).then(([thumbBase64, imageBase64]) =>
-        saveToCache(cacheId, { thumbBase64, imageBase64 }, paragraphs, language)
+        saveToCache(cacheId, { thumbBase64, imageBase64 }, paragraphs, language, audio)
       ).catch(e => console.warn('[Cache] Save failed:', e));
     } catch (e: any) {
       if (e.name === 'AbortError') return;
@@ -181,7 +197,7 @@ export default function HomeScreen({ onParagraphsReady, uiLang, setUiLang }: Pro
   };
 
   const openCached = (item: CachedScreen) => {
-    onParagraphsReady(item.paragraphs, `data:image/jpeg;base64,${item.imageBase64}`, item.language || 'he', item.id, true);
+    onParagraphsReady(item.paragraphs, `data:image/jpeg;base64,${item.imageBase64}`, item.language || 'he', item.id, true, item.audio);
   };
 
   const confirmDeleteDay = async (group: DayGroup) => {
@@ -205,6 +221,7 @@ export default function HomeScreen({ onParagraphsReady, uiLang, setUiLang }: Pro
             prep: t.loaderPrep,
             analyze: t.loaderAnalyze,
             almost: t.loaderAlmost,
+            audio: t.loaderAudio,
             doneLabel: t.loaderDone,
             cancel: t.cancel,
           }}

@@ -4,47 +4,28 @@ import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native
 interface Labels {
   prep: string;
   analyze: string;
+  audio: string;
   almost: string;
   doneLabel: string;
   cancel: string;
 }
 
 interface Props {
-  status: string;
+  status: string;       // Current status text, shown directly
   done?: boolean;
   onCancel?: () => void;
   labels: Labels;
 }
 
 export default function ProgressLoader({ status, done = false, onCancel, labels }: Props) {
-  const STAGES = [
-    { at: 0,  label: labels.prep },
-    { at: 25, label: labels.analyze },
-    { at: 65, label: labels.almost },
-  ];
-
   const progress = useRef(new Animated.Value(0)).current;
-  const labelRef = useRef(STAGES[0].label);
-  const [label, setLabel] = React.useState(STAGES[0].label);
 
   useEffect(() => {
-    const anim = Animated.timing(progress, {
+    Animated.timing(progress, {
       toValue: 85,
       duration: 8000,
       useNativeDriver: false,
-    });
-    anim.start();
-
-    const listener = progress.addListener(({ value }) => {
-      const v = Math.round(value);
-      const stage = [...STAGES].reverse().find(s => v >= s.at);
-      if (stage && stage.label !== labelRef.current) {
-        labelRef.current = stage.label;
-        setLabel(stage.label);
-      }
-    });
-
-    return () => progress.removeListener(listener);
+    }).start();
   }, []);
 
   useEffect(() => {
@@ -54,7 +35,6 @@ export default function ProgressLoader({ status, done = false, onCancel, labels 
         duration: 300,
         useNativeDriver: false,
       }).start();
-      setLabel(labels.doneLabel);
     }
   }, [done]);
 
@@ -62,6 +42,8 @@ export default function ProgressLoader({ status, done = false, onCancel, labels 
     inputRange: [0, 100],
     outputRange: ['0%', '100%'],
   });
+
+  const label = done ? labels.doneLabel : (status || labels.prep);
 
   return (
     <View style={styles.container}>

@@ -7,11 +7,17 @@ export interface BoundingBox {
   height: number;
 }
 
+export interface TextSegment {
+  text: string;
+  language: string;  // ISO 639-1
+}
+
 export interface Paragraph {
   id: string;
   text: string;
   index: number;
   box: BoundingBox;
+  segments: TextSegment[];  // splitted by language
 }
 
 const RESPONSE_SCHEMA = {
@@ -19,7 +25,7 @@ const RESPONSE_SCHEMA = {
   properties: {
     documentLanguage: {
       type: 'string',
-      description: "ISO 639-1 code of the primary language in the image (e.g. 'he', 'en', 'ru', 'ar')",
+      description: "ISO 639-1 code of the primary language in the image (e.g. 'he', 'en', 'ru', 'de', 'fr')",
     },
     paragraphs: {
       type: 'array',
@@ -40,8 +46,26 @@ const RESPONSE_SCHEMA = {
             },
             required: ['top', 'left', 'width', 'height'],
           },
+          segments: {
+            type: 'array',
+            description: 'Split paragraph text into contiguous segments by language. If the whole paragraph is in one language, return one segment with the full text. If it has multiple languages mixed (e.g. Hebrew with English words, or German with English), split at language boundaries.',
+            items: {
+              type: 'object',
+              properties: {
+                text: {
+                  type: 'string',
+                  description: 'Exact text of this segment (preserve original whitespace and punctuation).',
+                },
+                language: {
+                  type: 'string',
+                  description: "ISO 639-1 code: 'he', 'en', 'ru', 'de', 'fr', 'es', 'it', 'ar', etc.",
+                },
+              },
+              required: ['text', 'language'],
+            },
+          },
         },
-        required: ['text', 'boundingBox'],
+        required: ['text', 'boundingBox', 'segments'],
       },
     },
   },
@@ -56,7 +80,9 @@ CRITICAL RULES — follow exactly:
 - Transcribe text WORD FOR WORD, exactly as written. Do NOT paraphrase, summarize, auto-correct, or replace words with synonyms.
 - If the image says "דמקה, שש בש, מטקות" — return exactly that. Never invent "משחקי קופסא" or any other generalization.
 - A heading + its lines = ONE paragraph. A list or schedule = ONE paragraph.
-- Detect the primary language of the document and return its ISO code (e.g. "he", "en", "ru").
+- Detect the primary language of the document and return its ISO code (e.g. "he", "en", "ru", "de").
+- For EACH paragraph, return "segments": split the paragraph text by language. If the whole paragraph is one language, return ONE segment. If it mixes languages (e.g. Hebrew with English brand names, or German with English words), split at language boundaries. The concatenation of all segments' text MUST equal the paragraph text exactly.
+- Use ISO 639-1 codes: 'he' (Hebrew), 'en' (English), 'ru' (Russian), 'de' (German), 'fr' (French), 'es' (Spanish), 'it' (Italian), 'ar' (Arabic), etc.
 - Return bounding box coordinates in 0–1000 scale (0 = top/left edge, 1000 = bottom/right edge).`;
 
   const body = JSON.stringify({
@@ -65,7 +91,7 @@ CRITICAL RULES — follow exactly:
       {
         parts: [
           { inline_data: { mime_type: 'image/jpeg', data: base64 } },
-          { text: 'STRICT LITERAL OCR: transcribe every word exactly as written. Split into logical paragraphs. Return bounding boxes in 0–1000 scale. Detect the document language.' },
+          { text: 'STRICT LITERAL OCR: transcribe every word exactly as written. Split into logical paragraphs. For each paragraph, also split into language segments. Return bounding boxes in 0–1000 scale.' },
         ],
       },
     ],
@@ -114,19 +140,24 @@ CRITICAL RULES — follow exactly:
   console.log(JSON.stringify(parsed, null, 2));
 
   const paragraphs = (boxes as any[])
-    .map((item: any, index: number) => ({
-      id: `p-${index}`,
-      text: item.text?.trim() || '',
-      index,
-      // Gemini returns all coordinates in 0–1000 scale
-      box: {
-        x:      (item.boundingBox?.left   ?? 0) / 1000,
-        y:      (item.boundingBox?.top    ?? 0) / 1000,
-        width:  (item.boundingBox?.width  ?? 0) / 1000,
-        height: (item.boundingBox?.height ?? 0) / 1000,
-      },
-    }))
-    .filter((p: Paragraph) => p.text.length > 0);
+    .map((item: any) => {
+      const text = item.text?.trim() || '';
+      const segments: TextSegment[] = (item.segments && item.segments.length > 0)
+        ? item.segments.map((s: any) => ({ text: s.text || '', language: s.language || language }))
+        : [{ text, language }];
+      return {
+        text,
+        box: {
+          x:      (item.boundingBox?.left   ?? 0) / 1000,
+          y:      (item.boundingBox?.top    ?? 0) / 1000,
+          width:  (item.boundingBox?.width  ?? 0) / 1000,
+          height: (item.boundingBox?.height ?? 0) / 1000,
+        },
+        segments,
+      };
+    })
+    .filter((p) => p.text.length > 0)
+    .map((p, index): Paragraph => ({ ...p, id: `p-${index}`, index }));  // re-index after filter
 
   return { paragraphs, language };
 }

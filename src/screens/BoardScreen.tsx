@@ -11,10 +11,13 @@ import {
   Animated,
   PanResponder,
   Modal,
+  Platform,
 } from 'react-native';
 import * as Speech from 'expo-speech';
+import { Audio } from 'expo-av';
 import { Feather } from '@expo/vector-icons';
 import { Paragraph } from '../services/claude';
+import { ParagraphAudio } from '../services/tts';
 import { UiLang, UI } from '../i18n';
 
 interface Props {
@@ -26,6 +29,7 @@ interface Props {
   onExit: () => void;
   onDelete: () => void;
   uiLang: UiLang;
+  audio?: ParagraphAudio[];  // Android: pre-generated TTS audio
 }
 
 const COLORS = ['#2F628C', '#51606F', '#68587A', '#0F4A73', '#3A4857', '#504061', '#245882', '#42474E'];
@@ -200,9 +204,10 @@ function getDistance(touches: any[]): number {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
-export default function BoardScreen({ imageUri, paragraphs, language, isCached, timestamp, onExit, onDelete, uiLang }: Props) {
+export default function BoardScreen({ imageUri, paragraphs, language, isCached, timestamp, onExit, onDelete, uiLang, audio }: Props) {
   const t = UI[uiLang];
   const uiRTL = uiLang === 'he';
+  const soundRef = useRef<Audio.Sound | null>(null);
   const [imageLayout, setImageLayout] = useState<{ width: number; height: number } | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(null);
   const [activeParagraph, setActiveParagraph] = useState<Paragraph | null>(null);
@@ -232,7 +237,10 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
   const isPinching = useRef(false);
 
   useEffect(() => {
-    return () => { Speech.stop(); };
+    return () => {
+      Speech.stop();
+      soundRef.current?.unloadAsync().catch(() => {});
+    };
   }, []);
 
   const resetZoom = useCallback(() => {
@@ -349,7 +357,8 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
     return { rW, rH, oX, oY };
   };
 
-  const startReading = useCallback((p: Paragraph) => {
+  // iOS path: использует expo-speech в реальном времени
+  const startReadingIos = useCallback((p: Paragraph) => {
     Speech.stop();
     const { words: wordList, lineBreaks: breaks } = parseWords(p.text);
     setWords(wordList);
@@ -386,8 +395,91 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
     setTimeout(() => speakSegment(0, 0), 150);
   }, [language]);
 
-  const stopReading = () => {
+  // Android path: играем готовое аудио из кэша через expo-av
+  const startReadingAndroid = useCallback(async (p: Paragraph) => {
+    const paragraphAudio = audio?.[p.index];
+    if (!paragraphAudio || paragraphAudio.segments.length === 0) {
+      // Fallback на expo-speech если аудио нет (например, не сгенерировалось)
+      startReadingIos(p);
+      return;
+    }
+
+    // Остановить предыдущее воспроизведение
+    if (soundRef.current) {
+      try { await soundRef.current.unloadAsync(); } catch {}
+      soundRef.current = null;
+    }
+
+    const { words: wordList, lineBreaks: breaks } = parseWords(p.text);
+    setWords(wordList);
+    setLineBreaks(breaks);
+    setActiveParagraph(p);
+    setCurrentWordIndex(0);
+    setIsPlaying(true);
+
+    // Базовый индекс слова для каждого сегмента (сегменты идут подряд)
+    const segmentBaseIdx: number[] = [0];
+    for (let i = 0; i < paragraphAudio.segments.length - 1; i++) {
+      segmentBaseIdx.push(segmentBaseIdx[i] + paragraphAudio.segments[i].words.length);
+    }
+
+    const playSegment = async (idx: number) => {
+      if (idx >= paragraphAudio.segments.length) {
+        setIsPlaying(false);
+        setCurrentWordIndex(-1);
+        soundRef.current = null;
+        return;
+      }
+      const seg = paragraphAudio.segments[idx];
+      const baseWordIdx = segmentBaseIdx[idx];
+
+      try {
+        const { sound } = await Audio.Sound.createAsync({ uri: seg.audioUri });
+        soundRef.current = sound;
+
+        sound.setOnPlaybackStatusUpdate(async status => {
+          if (!status.isLoaded) return;
+          if (status.didJustFinish) {
+            await sound.unloadAsync();
+            playSegment(idx + 1);
+            return;
+          }
+          const posSec = (status.positionMillis || 0) / 1000;
+          // Найти текущее слово в этом сегменте
+          let localIdx = 0;
+          for (let i = 0; i < seg.words.length; i++) {
+            if (seg.wordTimes[i] <= posSec) localIdx = i;
+            else break;
+          }
+          setCurrentWordIndex(baseWordIdx + localIdx);
+        });
+
+        await sound.playAsync();
+      } catch (e) {
+        console.warn('[BoardScreen] Audio play error:', e);
+        setIsPlaying(false);
+        setCurrentWordIndex(-1);
+      }
+    };
+
+    playSegment(0);
+  }, [audio, startReadingIos]);
+
+  const startReading = useCallback((p: Paragraph) => {
+    if (Platform.OS === 'android' && audio) {
+      startReadingAndroid(p);
+    } else {
+      startReadingIos(p);
+    }
+  }, [audio, startReadingIos, startReadingAndroid]);
+
+  const stopReading = async () => {
     Speech.stop();
+    if (soundRef.current) {
+      try { await soundRef.current.stopAsync(); } catch {}
+      try { await soundRef.current.unloadAsync(); } catch {}
+      soundRef.current = null;
+    }
     setIsPlaying(false);
     setCurrentWordIndex(-1);
   };

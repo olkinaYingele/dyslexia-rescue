@@ -6,6 +6,7 @@ import HomeScreen from './src/screens/HomeScreen';
 import BoardScreen from './src/screens/BoardScreen';
 import { Paragraph } from './src/services/claude';
 import { deleteFromCache } from './src/services/cache';
+import { ParagraphAudio } from './src/services/tts';
 import { UiLang } from './src/i18n';
 
 type Screen = 'home' | 'board';
@@ -49,6 +50,7 @@ export default function App() {
   const [timestamp, setTimestamp] = useState<number>(Date.now());
   const [currentCacheId, setCurrentCacheId] = useState<string | null>(null);
   const [isFromArchive, setIsFromArchive] = useState(false);
+  const [audio, setAudio] = useState<ParagraphAudio[] | undefined>(undefined);
   const [uiLang, setUiLang] = useState<UiLang>('en');
 
   const [fontsLoaded] = useFonts({
@@ -59,7 +61,8 @@ export default function App() {
   });
 
   const handleParagraphsReady = (
-    p: Paragraph[], uri: string, lang: string, cacheId?: string, fromArchive: boolean = false
+    p: Paragraph[], uri: string, lang: string, cacheId?: string, fromArchive: boolean = false,
+    audioData?: ParagraphAudio[]
   ) => {
     setParagraphs(p);
     setImageUri(uri);
@@ -67,6 +70,7 @@ export default function App() {
     setTimestamp(Date.now());
     setCurrentCacheId(cacheId || null);
     setIsFromArchive(fromArchive);
+    setAudio(audioData);
     setScreen('board');
   };
 
@@ -99,6 +103,7 @@ export default function App() {
           onExit={handleExit}
           onDelete={handleDelete}
           uiLang={uiLang}
+          audio={audio}
         />
       )}
     </PaperProvider>

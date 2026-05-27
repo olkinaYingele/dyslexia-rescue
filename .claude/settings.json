@@ -1,5 +1,26 @@
 {
   "enabledPlugins": {
     "expo@claude-plugins-official": true
+  },
+  "permissions": {
+    "allow": [
+      "Edit",
+      "Write",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(npm install *)",
+      "Bash(npx expo install *)",
+      "Bash(mkdir *)",
+      "Bash(rm src/*)",
+      "Bash(ls *)",
+      "Bash(grep *)",
+      "Bash(find *)",
+      "Bash(cat *)"
+    ]
   }
 }
