@@ -1,6 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { TTS_API_KEY } from '../config';
 import { TextSegment } from './claude';
+import { HEBREW_ABBREV, normalizeHebrewQuotes } from './textCleanup';
 
 // Карта голосов по языку. Дешёвые Standard голоса (~130KB/абзац).
 const VOICES: Record<string, { lang: string; voice: string }> = {
@@ -43,19 +44,44 @@ function escapeXml(s: string): string {
 // а не интерпретировал как время ("13:54" → "тринадцать пятьдесят четыре",
 // а не "шесть минут до двух днём").
 function wrapNumbersForLiteralReading(escapedWord: string): string {
-  // HH:MM или H:MM → две группы цифр читаются как cardinal
   return escapedWord.replace(
     /(\d{1,2}):(\d{1,2})/g,
     '<say-as interpret-as="cardinal">$1</say-as>:<say-as interpret-as="cardinal">$2</say-as>'
   );
 }
 
+// Раскрывает ивритские сокращения через SSML <sub alias="...">.
+// TTS читает alias (полное слово), но мы видим в дисплее оригинал
+// и тайминги слов остаются на оригинальных позициях.
+function expandHebrewAbbreviations(escapedWord: string, language: string): string {
+  if (language !== 'he') return escapedWord;
+  let result = escapedWord;
+  // Сначала проверяем известные сокращения из словаря (длинные впереди — длиннее имеет приоритет)
+  const sortedAbbrevs = Object.keys(HEBREW_ABBREV).sort((a, b) => b.length - a.length);
+  for (const abbrev of sortedAbbrevs) {
+    if (result.includes(abbrev)) {
+      const alias = escapeXml(HEBREW_ABBREV[abbrev]);
+      // escapeAll позволит безопасно использовать в alias
+      result = result.split(abbrev).join(`<sub alias="${alias}">${abbrev}</sub>`);
+    }
+  }
+  // Неизвестные сокращения с ивритской кавычкой ״ — читаем буквы отдельно
+  // (например "מל״ג" → m-l-g, но через alias чтобы тайминг не сбивался)
+  result = result.replace(/([א-ת])״([א-ת])/g, (_match, l1, l2) => {
+    return `<sub alias="${l1} ${l2}">${l1}״${l2}</sub>`;
+  });
+  return result;
+}
+
 // Split into words and build SSML with marks before each word.
-function buildSsml(text: string): { ssml: string; words: string[] } {
-  const words = text.split(/\s+/).filter(w => w.length > 0);
+function buildSsml(text: string, language: string): { ssml: string; words: string[] } {
+  // Нормализуем виды кавычек для иврита, чтобы словарь сработал
+  const normalizedText = language === 'he' ? normalizeHebrewQuotes(text) : text;
+  const words = normalizedText.split(/\s+/).filter(w => w.length > 0);
   const parts = words.map((w, i) => {
-    const escaped = escapeXml(w);
-    const processed = wrapNumbersForLiteralReading(escaped);
+    let processed = escapeXml(w);
+    processed = wrapNumbersForLiteralReading(processed);
+    processed = expandHebrewAbbreviations(processed, language);
     return `<mark name="w${i}"/>${processed}`;
   });
   const ssml = `<speak>${parts.join(' ')}<mark name="end"/></speak>`;
@@ -64,7 +90,7 @@ function buildSsml(text: string): { ssml: string; words: string[] } {
 
 async function ttsSynthesize(text: string, language: string): Promise<{ audioBase64: string; words: string[]; wordTimes: number[] }> {
   const voice = VOICES[language] || FALLBACK_VOICE;
-  const { ssml, words } = buildSsml(text);
+  const { ssml, words } = buildSsml(text, language);
 
   const url = `https://texttospeech.googleapis.com/v1beta1/text:synthesize?key=${TTS_API_KEY}`;
   const res = await fetch(url, {
