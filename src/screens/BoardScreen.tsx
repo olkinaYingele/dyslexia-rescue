@@ -190,6 +190,11 @@ function splitByLanguage(text: string, docLanguage: string): { text: string; lan
   return segments.length > 0 ? segments : [{ text, lang: docLanguage }];
 }
 
+// Определяет RTL по содержимому текста (иврит/арабский → RTL)
+function isTextRTL(text: string): boolean {
+  return /[֐-׿؀-ۿ܀-޿ހ-޿]/.test(text);
+}
+
 function formatTimestamp(ts?: number, uiLang: UiLang = 'en'): string {
   const d = new Date(ts || Date.now());
   const locale = uiLang === 'en' ? 'en-US' : 'he-IL';
@@ -497,7 +502,8 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
   };
 
   const rendered = getRenderedRect();
-  const isRTL = ['he', 'ar', 'fa', 'ur'].includes(language);
+  // RTL направление для нижней панели — по содержимому активного абзаца, не по всему документу
+  const isRTL = activeParagraph ? isTextRTL(activeParagraph.text) : false;
 
   return (
     <SafeAreaView style={styles.container}>
