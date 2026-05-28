@@ -39,11 +39,25 @@ function escapeXml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 }
 
+// Оборачивает HH:MM в SSML cardinal — чтобы TTS читал числа буквально,
+// а не интерпретировал как время ("13:54" → "тринадцать пятьдесят четыре",
+// а не "шесть минут до двух днём").
+function wrapNumbersForLiteralReading(escapedWord: string): string {
+  // HH:MM или H:MM → две группы цифр читаются как cardinal
+  return escapedWord.replace(
+    /(\d{1,2}):(\d{1,2})/g,
+    '<say-as interpret-as="cardinal">$1</say-as>:<say-as interpret-as="cardinal">$2</say-as>'
+  );
+}
+
 // Split into words and build SSML with marks before each word.
-// Returns { ssml, words } where words is the array we can show to user.
 function buildSsml(text: string): { ssml: string; words: string[] } {
   const words = text.split(/\s+/).filter(w => w.length > 0);
-  const parts = words.map((w, i) => `<mark name="w${i}"/>${escapeXml(w)}`);
+  const parts = words.map((w, i) => {
+    const escaped = escapeXml(w);
+    const processed = wrapNumbersForLiteralReading(escaped);
+    return `<mark name="w${i}"/>${processed}`;
+  });
   const ssml = `<speak>${parts.join(' ')}<mark name="end"/></speak>`;
   return { ssml, words };
 }
