@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "מקריא",
+    "name": "Read to me",
     "slug": "makria",
     "version": "1.0.0",
     "orientation": "default",
@@ -17,8 +17,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.olkina.makria",
       "infoPlist": {
-        "NSCameraUsageDescription": "מקריא צריך גישה למצלמה כדי לצלם טקסט לקריאה.",
-        "NSPhotoLibraryUsageDescription": "מקריא צריך גישה לתמונות כדי לבחור תמונה עם טקסט לקריאה."
+        "NSCameraUsageDescription": "Read to me needs camera access to photograph text for reading.",
+        "NSPhotoLibraryUsageDescription": "Read to me needs photo access to pick an image with text for reading."
       }
     },
     "android": {
@@ -32,7 +32,8 @@
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.INTERNET"
+        "android.permission.INTERNET",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -43,10 +44,15 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "מקריא צריך גישה לתמונות כדי לבחור תמונה עם טקסט לקריאה.",
-          "cameraPermission": "מקריא צריך גישה למצלמה כדי לצלם טקסט לקריאה."
+          "photosPermission": "Read to me needs photo access to pick an image with text for reading.",
+          "cameraPermission": "Read to me needs camera access to photograph text for reading."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "eb664aa6-bbb5-4467-a012-43f75e733ffc"
+      }
+    }
   }
 }
