@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   Text,
-  SafeAreaView,
   LayoutChangeEvent,
   ScrollView,
   Animated,
@@ -13,6 +12,7 @@ import {
   Modal,
   Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Speech from 'expo-speech';
 import { Audio } from 'expo-av';
 import { Feather } from '@expo/vector-icons';

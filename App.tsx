@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { PaperProvider, MD3LightTheme } from 'react-native-paper';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import HomeScreen from './src/screens/HomeScreen';
 import BoardScreen from './src/screens/BoardScreen';
@@ -88,24 +89,26 @@ export default function App() {
   if (!fontsLoaded) return null;
 
   return (
-    <PaperProvider theme={theme}>
-      <StatusBar style="dark" />
-      {screen === 'home' && (
-        <HomeScreen onParagraphsReady={handleParagraphsReady} uiLang={uiLang} setUiLang={setUiLang} />
-      )}
-      {screen === 'board' && (
-        <BoardScreen
-          imageUri={imageUri}
-          paragraphs={paragraphs}
-          language={language}
-          isCached={isFromArchive}
-          timestamp={timestamp}
-          onExit={handleExit}
-          onDelete={handleDelete}
-          uiLang={uiLang}
-          audio={audio}
-        />
-      )}
-    </PaperProvider>
+    <SafeAreaProvider>
+      <PaperProvider theme={theme}>
+        <StatusBar style="dark" />
+        {screen === 'home' && (
+          <HomeScreen onParagraphsReady={handleParagraphsReady} uiLang={uiLang} setUiLang={setUiLang} />
+        )}
+        {screen === 'board' && (
+          <BoardScreen
+            imageUri={imageUri}
+            paragraphs={paragraphs}
+            language={language}
+            isCached={isFromArchive}
+            timestamp={timestamp}
+            onExit={handleExit}
+            onDelete={handleDelete}
+            uiLang={uiLang}
+            audio={audio}
+          />
+        )}
+      </PaperProvider>
+    </SafeAreaProvider>
   );
 }
