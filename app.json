@@ -7,28 +7,46 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": false,
+    "owner": "olkina",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#8FB9FD"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.makria"
+      "bundleIdentifier": "com.olkina.makria",
+      "infoPlist": {
+        "NSCameraUsageDescription": "מקריא צריך גישה למצלמה כדי לצלם טקסט לקריאה.",
+        "NSPhotoLibraryUsageDescription": "מקריא צריך גישה לתמונות כדי לבחור תמונה עם טקסט לקריאה."
+      }
     },
     "android": {
+      "package": "com.olkina.makria",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#8FB9FD"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.INTERNET"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "מקריא צריך גישה לתמונות כדי לבחור תמונה עם טקסט לקריאה.",
+          "cameraPermission": "מקריא צריך גישה למצלמה כדי לצלם טקסט לקריאה."
+        }
+      ]
     ]
   }
 }
