@@ -1,0 +1,50 @@
+# .easignore работает как .gitignore, но для EAS Build.
+# Здесь мы копируем .gitignore МИНУС src/config.ts —
+# config.ts должен попасть в облачный билд (там API ключи), но НЕ в git.
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env*.local
+
+# typescript
+*.tsbuildinfo
+
+# generated native folders
+/ios
+/android
+
+# design source files
+*.psd
+
+# test scripts
+test-tts.mjs
+test-timestamps.mjs
