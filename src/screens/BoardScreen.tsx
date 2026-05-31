@@ -11,6 +11,7 @@ import {
   PanResponder,
   Modal,
   Platform,
+  AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Speech from 'expo-speech';
@@ -242,7 +243,27 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
   const isPinching = useRef(false);
 
   useEffect(() => {
+    // Конфигурируем аудио: не играть в фоне (по умолчанию iOS может продолжать)
+    Audio.setAudioModeAsync({
+      staysActiveInBackground: false,
+      playsInSilentModeIOS: true,
+      shouldDuckAndroid: true,
+    }).catch(() => {});
+
+    // Останавливаем чтение при сворачивании / блокировке экрана
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') {
+        Speech.stop();
+        soundRef.current?.stopAsync().catch(() => {});
+        soundRef.current?.unloadAsync().catch(() => {});
+        soundRef.current = null;
+        setIsPlaying(false);
+        setCurrentWordIndex(-1);
+      }
+    });
+
     return () => {
+      sub.remove();
       Speech.stop();
       soundRef.current?.unloadAsync().catch(() => {});
     };

@@ -18,7 +18,8 @@
       "bundleIdentifier": "com.olkina.makria",
       "infoPlist": {
         "NSCameraUsageDescription": "Read to me needs camera access to photograph text for reading.",
-        "NSPhotoLibraryUsageDescription": "Read to me needs photo access to pick an image with text for reading."
+        "NSPhotoLibraryUsageDescription": "Read to me needs photo access to pick an image with text for reading.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
