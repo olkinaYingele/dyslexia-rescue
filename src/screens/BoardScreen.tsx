@@ -214,6 +214,10 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
   const t = UI[uiLang];
   const uiRTL = uiLang === 'he';
   const soundRef = useRef<Audio.Sound | null>(null);
+  // Каждый раз когда начинаем/останавливаем чтение — увеличиваем session.
+  // Это инвалидирует старые async-колбэки (didJustFinish от unloaded sound и т.п.),
+  // чтобы не было гонок типа "новый абзац начался, но callback старого продолжает играть".
+  const sessionRef = useRef(0);
   const [imageLayout, setImageLayout] = useState<{ width: number; height: number } | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(null);
   const [activeParagraph, setActiveParagraph] = useState<Paragraph | null>(null);
@@ -253,6 +257,7 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
     // Останавливаем чтение при сворачивании / блокировке экрана
     const sub = AppState.addEventListener('change', (state) => {
       if (state !== 'active') {
+        sessionRef.current++;  // Инвалидируем колбэки
         Speech.stop();
         soundRef.current?.stopAsync().catch(() => {});
         soundRef.current?.unloadAsync().catch(() => {});
@@ -385,6 +390,7 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
 
   // iOS path: использует expo-speech в реальном времени
   const startReadingIos = useCallback((p: Paragraph) => {
+    const session = ++sessionRef.current;
     Speech.stop();
     const { words: wordList, lineBreaks: breaks } = parseWords(p.text);
     setWords(wordList);
@@ -397,6 +403,7 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
     const segments = splitByLanguage(cleanedText, language);
 
     const speakSegment = (index: number, offset: number) => {
+      if (session !== sessionRef.current) return;
       if (index >= segments.length) {
         setIsPlaying(false);
         setCurrentWordIndex(-1);
@@ -407,14 +414,19 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
         language: seg.lang,
         rate: 0.85,
         onBoundary: (event) => {
+          if (session !== sessionRef.current) return;
           const absChar = offset + event.charIndex;
           const upToChar = cleanedText.slice(0, absChar);
           const wordsBefore = upToChar.trim().split(/\s+/).filter(w => w.length > 0);
           setCurrentWordIndex(wordsBefore.length);
         },
         onDone: () => speakSegment(index + 1, offset + seg.text.length),
-        onStopped: () => { setIsPlaying(false); setCurrentWordIndex(-1); },
-        onError: () => { setIsPlaying(false); setCurrentWordIndex(-1); },
+        onStopped: () => {
+          if (session === sessionRef.current) { setIsPlaying(false); setCurrentWordIndex(-1); }
+        },
+        onError: () => {
+          if (session === sessionRef.current) { setIsPlaying(false); setCurrentWordIndex(-1); }
+        },
       });
     };
 
@@ -430,11 +442,17 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
       return;
     }
 
+    // Новая сессия — инвалидирует все async-колбэки от предыдущих звуков
+    const session = ++sessionRef.current;
+
     // Остановить предыдущее воспроизведение
     if (soundRef.current) {
       try { await soundRef.current.unloadAsync(); } catch {}
       soundRef.current = null;
     }
+
+    // Если за время unload пришла новая команда (тап на третий абзац) — выйти
+    if (session !== sessionRef.current) return;
 
     const { words: wordList, lineBreaks: breaks } = parseWords(p.text);
     setWords(wordList);
@@ -450,6 +468,7 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
     }
 
     const playSegment = async (idx: number) => {
+      if (session !== sessionRef.current) return;  // Сессия устарела — выходим
       if (idx >= paragraphAudio.segments.length) {
         setIsPlaying(false);
         setCurrentWordIndex(-1);
@@ -461,17 +480,23 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
 
       try {
         const { sound } = await Audio.Sound.createAsync({ uri: seg.audioUri });
+        if (session !== sessionRef.current) {
+          // Пока создавали звук — пришла новая команда. Не играем.
+          try { await sound.unloadAsync(); } catch {}
+          return;
+        }
         soundRef.current = sound;
 
         sound.setOnPlaybackStatusUpdate(async status => {
+          if (session !== sessionRef.current) return;  // Колбэк устарел
           if (!status.isLoaded) return;
           if (status.didJustFinish) {
-            await sound.unloadAsync();
+            try { await sound.unloadAsync(); } catch {}
+            if (session !== sessionRef.current) return;
             playSegment(idx + 1);
             return;
           }
           const posSec = (status.positionMillis || 0) / 1000;
-          // Найти текущее слово в этом сегменте
           let localIdx = 0;
           for (let i = 0; i < seg.words.length; i++) {
             if (seg.wordTimes[i] <= posSec) localIdx = i;
@@ -483,8 +508,10 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
         await sound.playAsync();
       } catch (e) {
         console.warn('[BoardScreen] Audio play error:', e);
-        setIsPlaying(false);
-        setCurrentWordIndex(-1);
+        if (session === sessionRef.current) {
+          setIsPlaying(false);
+          setCurrentWordIndex(-1);
+        }
       }
     };
 
@@ -500,6 +527,8 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
   }, [audio, startReadingIos, startReadingAndroid]);
 
   const stopReading = async () => {
+    // Инвалидируем все активные колбэки, чтобы они не дёргали playSegment дальше
+    sessionRef.current++;
     Speech.stop();
     if (soundRef.current) {
       try { await soundRef.current.stopAsync(); } catch {}
