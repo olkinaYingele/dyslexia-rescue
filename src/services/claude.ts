@@ -78,6 +78,8 @@ export async function extractParagraphs(base64: string, signal?: AbortSignal): P
   const systemInstruction = `PERFORM A STRICT LITERAL OCR. Identify all text in the image and split it into logical paragraphs.
 CRITICAL RULES — follow exactly:
 - Transcribe text WORD FOR WORD, exactly as written. Do NOT paraphrase, summarize, auto-correct, or replace words with synonyms.
+- NEVER translate text. DO NOT mix meanings or words between different lines or different languages on the page (e.g., do not inject the translation of a Russian word into an adjacent Hebrew line).
+- Treat EVERY word as an isolated visual symbol. Act strictly as a blind mechanical scanner. Do NOT use semantic context from surrounding sentences to guess words.
 - If the image says "דמקה, שש בש, מטקות" — return exactly that. Never invent "משחקי קופסא" or any other generalization.
 - A heading + its lines = ONE paragraph. A list or schedule = ONE paragraph.
 - Detect the primary language of the document and return its ISO code (e.g. "he", "en", "ru", "de").
