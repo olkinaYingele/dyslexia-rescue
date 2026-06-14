@@ -17,8 +17,18 @@
         "simulator": false
       }
     },
+    "testflight": {
+      "distribution": "store",
+      "autoIncrement": true,
+      "ios": {
+        "simulator": false
+      }
+    },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      }
     }
   },
   "submit": {
