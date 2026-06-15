@@ -114,7 +114,9 @@ async function ttsSynthesize(text: string, language: string): Promise<{ audioBas
   const audioBase64 = data.audioContent || '';
   // Build wordTimes: index N = start time of word N; final entry = end time
   const timepoints: Array<{ markName: string; timeSeconds: number }> = data.timepoints || [];
-  const wordTimes: number[] = new Array(words.length).fill(0);
+  // -1 — метка не пришла (Google пропускает короткие/служебные слова, особенно в иврите).
+  // Потом заполним линейной интерполяцией.
+  const rawWordTimes: number[] = new Array(words.length).fill(-1);
   let endTime = 0;
   for (const tp of timepoints) {
     if (tp.markName === 'end') {
@@ -122,10 +124,26 @@ async function ttsSynthesize(text: string, language: string): Promise<{ audioBas
     } else if (tp.markName.startsWith('w')) {
       const idx = parseInt(tp.markName.slice(1), 10);
       if (!isNaN(idx) && idx < words.length) {
-        wordTimes[idx] = tp.timeSeconds;
+        rawWordTimes[idx] = tp.timeSeconds;
       }
     }
   }
+  if (rawWordTimes[0] === -1) rawWordTimes[0] = 0;
+  // Линейная интерполяция между известными точками
+  for (let i = 1; i < rawWordTimes.length; i++) {
+    if (rawWordTimes[i] === -1) {
+      let nextIdx = i + 1;
+      while (nextIdx < rawWordTimes.length && rawWordTimes[nextIdx] === -1) nextIdx++;
+      const nextTime = nextIdx < rawWordTimes.length ? rawWordTimes[nextIdx] : endTime;
+      const steps = nextIdx - (i - 1);
+      const step = (nextTime - rawWordTimes[i - 1]) / steps;
+      for (let j = i; j < nextIdx; j++) {
+        rawWordTimes[j] = rawWordTimes[j - 1] + step;
+      }
+      i = nextIdx;
+    }
+  }
+  const wordTimes = rawWordTimes;
   wordTimes.push(endTime);  // wordTimes.length = words.length + 1
   return { audioBase64, words, wordTimes };
 }

@@ -479,7 +479,10 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
       const baseWordIdx = segmentBaseIdx[idx];
 
       try {
-        const { sound } = await Audio.Sound.createAsync({ uri: seg.audioUri });
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: seg.audioUri },
+          { progressUpdateIntervalMillis: 50 }  // короткие слова требуют частого опроса
+        );
         if (session !== sessionRef.current) {
           // Пока создавали звук — пришла новая команда. Не играем.
           try { await sound.unloadAsync(); } catch {}
@@ -783,9 +786,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#504061',
   } : {
-    // Android: на RTL фон "растекается" по всей строке — выделяем только цветом и жирностью
-    fontWeight: '700',
-    color: '#2F628C',
+    // Android: на RTL фон "растекается" по всей строке —
+    // компенсируем явным жирным фонтом + ярким цветом + подчёркиванием
+    fontFamily: 'Fredoka-Bold',
+    color: '#c49f77',
+    textDecorationLine: 'underline',
+    textDecorationStyle: 'solid',
   },
   // Delete modal
   modalOverlay: {
