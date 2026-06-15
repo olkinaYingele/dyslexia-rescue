@@ -776,11 +776,16 @@ const styles = StyleSheet.create({
     fontFamily: 'Fredoka-Regular',
     color: '#181C20',
   },
-  activeWord: {
+  activeWord: Platform.OS === 'ios' ? {
+    // iOS: фон работает корректно
     backgroundColor: '#EFDBFF',
     borderRadius: 4,
     fontWeight: '700',
     color: '#504061',
+  } : {
+    // Android: на RTL фон "растекается" по всей строке — выделяем только цветом и жирностью
+    fontWeight: '700',
+    color: '#2F628C',
   },
   // Delete modal
   modalOverlay: {
