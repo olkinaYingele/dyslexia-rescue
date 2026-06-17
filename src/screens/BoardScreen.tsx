@@ -30,7 +30,7 @@ interface Props {
   onExit: () => void;
   onDelete: () => void;
   uiLang: UiLang;
-  audio?: ParagraphAudio[];  // Android: pre-generated TTS audio
+  audio?: (ParagraphAudio | undefined)[];  // Android: pre-generated TTS audio (undefined = generation failed for this paragraph, will fallback to expo-speech)
 }
 
 const COLORS = ['#2F628C', '#51606F', '#68587A', '#0F4A73', '#3A4857', '#504061', '#245882', '#42474E'];
@@ -223,6 +223,7 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
   const [activeParagraph, setActiveParagraph] = useState<Paragraph | null>(null);
   const [currentWordIndex, setCurrentWordIndex] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);  // звук на паузе (Android) или активный абзац остановлен (iOS)
   const [words, setWords] = useState<string[]>([]);
   const [lineBreaks, setLineBreaks] = useState<Set<number>>(new Set());
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -254,6 +255,15 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
       shouldDuckAndroid: true,
     }).catch(() => {});
 
+    // Прогрев аудио-движка Android — первое expo-av обращение долгое.
+    // Загружаем и сразу выгружаем первое аудио, чтобы пользователь не ждал на первом тапе.
+    if (Platform.OS === 'android' && audio?.[0]?.segments?.[0]) {
+      const seg = audio[0].segments[0];
+      Audio.Sound.createAsync({ uri: seg.audioUri }).then(({ sound }) => {
+        sound.unloadAsync().catch(() => {});
+      }).catch(() => {});
+    }
+
     // Останавливаем чтение при сворачивании / блокировке экрана
     const sub = AppState.addEventListener('change', (state) => {
       if (state !== 'active') {
@@ -263,6 +273,7 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
         soundRef.current?.unloadAsync().catch(() => {});
         soundRef.current = null;
         setIsPlaying(false);
+        setIsPaused(false);
         setCurrentWordIndex(-1);
       }
     });
@@ -398,9 +409,22 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
     setActiveParagraph(p);
     setCurrentWordIndex(0);
     setIsPlaying(true);
+    setIsPaused(false);
 
     const cleanedText = cleanForSpeech(p.text);
     const segments = splitByLanguage(cleanedText, language);
+
+    // Mapping: индекс cleaned-слова → индекс original-слова.
+    // cleanForSpeech раскрывает аббревиатуры (1 слово → 2-3), поэтому
+    // подсветка должна отображать оригинальное слово пока звучит раскрытие.
+    const originalWords = p.text.split(/\s+/).filter(w => w.length > 0);
+    const cleanedToOriginal: number[] = [];
+    for (let origIdx = 0; origIdx < originalWords.length; origIdx++) {
+      const expanded = cleanForSpeech(originalWords[origIdx]);
+      const subWords = expanded.split(/\s+/).filter(w => w.length > 0);
+      const count = subWords.length || 1;
+      for (let i = 0; i < count; i++) cleanedToOriginal.push(origIdx);
+    }
 
     const speakSegment = (index: number, offset: number) => {
       if (session !== sessionRef.current) return;
@@ -418,7 +442,11 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
           const absChar = offset + event.charIndex;
           const upToChar = cleanedText.slice(0, absChar);
           const wordsBefore = upToChar.trim().split(/\s+/).filter(w => w.length > 0);
-          setCurrentWordIndex(wordsBefore.length);
+          // iOS отдаёт onBoundary с задержкой ~300мс из-за нативного TTS + RN bridge.
+          // Подсвечиваем ОДНО слово ВПЕРЁД чтобы визуально совпадало с произношением.
+          const cleanedIdx = wordsBefore.length;
+          const originalIdx = cleanedToOriginal[cleanedIdx] ?? cleanedIdx;
+          setCurrentWordIndex(originalIdx);
         },
         onDone: () => speakSegment(index + 1, offset + seg.text.length),
         onStopped: () => {
@@ -460,6 +488,7 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
     setActiveParagraph(p);
     setCurrentWordIndex(0);
     setIsPlaying(true);
+    setIsPaused(false);
 
     // Базовый индекс слова для каждого сегмента (сегменты идут подряд)
     const segmentBaseIdx: number[] = [0];
@@ -529,6 +558,27 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
     }
   }, [audio, startReadingIos, startReadingAndroid]);
 
+  // Пауза: Android — через expo-av pauseAsync, iOS — через expo-speech Speech.pause.
+  const pauseReading = async () => {
+    if (Platform.OS === 'android' && soundRef.current) {
+      try { await soundRef.current.pauseAsync(); } catch {}
+    } else {
+      Speech.pause();
+    }
+    setIsPlaying(false);
+    setIsPaused(true);
+  };
+
+  const resumeReading = async () => {
+    if (Platform.OS === 'android' && soundRef.current) {
+      try { await soundRef.current.playAsync(); } catch {}
+    } else {
+      Speech.resume();
+    }
+    setIsPlaying(true);
+    setIsPaused(false);
+  };
+
   const stopReading = async () => {
     // Инвалидируем все активные колбэки, чтобы они не дёргали playSegment дальше
     sessionRef.current++;
@@ -539,6 +589,7 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
       soundRef.current = null;
     }
     setIsPlaying(false);
+    setIsPaused(false);
     setCurrentWordIndex(-1);
   };
 
@@ -618,7 +669,15 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
                   { left, top, width, height, borderColor: color },
                   isActive && { backgroundColor: `${color}22`, borderWidth: 3 },
                 ]}
-                onPress={() => isActive && isPlaying ? stopReading() : startReading(p)}
+                onPress={() => {
+                  if (isActive) {
+                    if (isPlaying) pauseReading();
+                    else if (isPaused) resumeReading();
+                    else startReading(p);
+                  } else {
+                    startReading(p);
+                  }
+                }}
                 activeOpacity={0.6}
               >
                 <View style={[styles.badge, { backgroundColor: color }]}>
@@ -648,7 +707,11 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
 
           <TouchableOpacity
             style={styles.playBtn}
-            onPress={() => isPlaying ? stopReading() : startReading(activeParagraph)}
+            onPress={() => {
+              if (isPlaying) pauseReading();
+              else if (isPaused) resumeReading();
+              else startReading(activeParagraph);
+            }}
           >
             <Feather name={isPlaying ? 'pause' : 'play'} size={22} color="#FFFFFF" />
           </TouchableOpacity>

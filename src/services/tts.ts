@@ -91,6 +91,9 @@ function buildSsml(text: string, language: string): { ssml: string; words: strin
 async function ttsSynthesize(text: string, language: string): Promise<{ audioBase64: string; words: string[]; wordTimes: number[] }> {
   const voice = VOICES[language] || FALLBACK_VOICE;
   const { ssml, words } = buildSsml(text, language);
+  const t0 = Date.now();
+  const ts = new Date().toLocaleTimeString('he-IL', { hour12: false });
+  console.log(`[${ts}] → TTS request [${language}, ${text.length} chars]`);
 
   const url = `https://texttospeech.googleapis.com/v1beta1/text:synthesize?key=${TTS_API_KEY}`;
   const res = await fetch(url, {
@@ -103,6 +106,7 @@ async function ttsSynthesize(text: string, language: string): Promise<{ audioBas
       enableTimePointing: ['SSML_MARK'],
     }),
   });
+  console.log(`[${ts}] ← TTS reply [${language}, ${text.length} chars]: ${Date.now() - t0}ms`);
 
   if (!res.ok) {
     const errText = await res.text();
@@ -160,14 +164,52 @@ async function saveAudioFile(base64: string, fileName: string): Promise<string> 
   return uri;
 }
 
+// Google Cloud TTS лимит — 5000 байт SSML на запрос.
+// SSML markup (mark/sub/say-as) добавляет много байт, поэтому для текста
+// держим консервативный лимит 800 символов на чанк.
+const MAX_CHUNK_CHARS = 800;
+
+function chunkSegmentIfNeeded(seg: TextSegment): TextSegment[] {
+  if (seg.text.length <= MAX_CHUNK_CHARS) return [seg];
+  const chunks: TextSegment[] = [];
+  let remaining = seg.text;
+  while (remaining.length > MAX_CHUNK_CHARS) {
+    let splitAt = -1;
+    // Идеально — на границе строки
+    for (let i = MAX_CHUNK_CHARS; i > MAX_CHUNK_CHARS / 2 && splitAt === -1; i--) {
+      if (remaining[i] === '\n') splitAt = i + 1;
+    }
+    // Или на конце предложения
+    if (splitAt === -1) {
+      for (let i = MAX_CHUNK_CHARS; i > MAX_CHUNK_CHARS / 2 && splitAt === -1; i--) {
+        if ('.!?'.includes(remaining[i])) splitAt = i + 1;
+      }
+    }
+    // Или хотя бы на пробеле
+    if (splitAt === -1) {
+      for (let i = MAX_CHUNK_CHARS; i > 0 && splitAt === -1; i--) {
+        if (/\s/.test(remaining[i])) splitAt = i + 1;
+      }
+    }
+    if (splitAt === -1) splitAt = MAX_CHUNK_CHARS;
+    chunks.push({ text: remaining.slice(0, splitAt).trim(), language: seg.language });
+    remaining = remaining.slice(splitAt).trim();
+  }
+  if (remaining.length > 0) chunks.push({ text: remaining, language: seg.language });
+  return chunks;
+}
+
 // Generate TTS audio for one paragraph (all its language segments in parallel).
 export async function generateParagraphAudio(
   segments: TextSegment[],
   cacheId: string,
   paragraphIndex: number,
 ): Promise<ParagraphAudio> {
+  // Бьём длинные сегменты на чанки чтобы не упереться в лимит TTS
+  const chunkedSegments = segments.flatMap(chunkSegmentIfNeeded);
+
   const results = await Promise.all(
-    segments.map(async (seg, segIdx) => {
+    chunkedSegments.map(async (seg, segIdx) => {
       const { audioBase64, words, wordTimes } = await ttsSynthesize(seg.text, seg.language);
       const fileName = `${cacheId}_p${paragraphIndex}_s${segIdx}.mp3`;
       const audioUri = await saveAudioFile(audioBase64, fileName);
@@ -186,13 +228,20 @@ export async function generateParagraphAudio(
 }
 
 // Generate audio for ALL paragraphs in parallel.
+// Если какой-то абзац не получилось — оставляем undefined, остальные работают.
+// В BoardScreen это вызовет fallback на expo-speech для этого конкретного абзаца.
 export async function generateAllAudio(
   paragraphs: Array<{ segments: TextSegment[] }>,
   cacheId: string,
-): Promise<ParagraphAudio[]> {
-  return Promise.all(
+): Promise<(ParagraphAudio | undefined)[]> {
+  const results = await Promise.allSettled(
     paragraphs.map((p, i) => generateParagraphAudio(p.segments, cacheId, i))
   );
+  return results.map((r, i) => {
+    if (r.status === 'fulfilled') return r.value;
+    console.warn(`[TTS] Paragraph ${i} failed:`, r.reason);
+    return undefined;
+  });
 }
 
 // Delete all audio files for a given cacheId (called when image is deleted)

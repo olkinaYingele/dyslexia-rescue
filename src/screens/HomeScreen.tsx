@@ -26,7 +26,7 @@ interface DayGroup {
 }
 
 interface Props {
-  onParagraphsReady: (paragraphs: Paragraph[], imageUri: string, language: string, cacheId?: string, fromArchive?: boolean, audio?: ParagraphAudio[]) => void;
+  onParagraphsReady: (paragraphs: Paragraph[], imageUri: string, language: string, cacheId?: string, fromArchive?: boolean, audio?: (ParagraphAudio | undefined)[]) => void;
   uiLang: UiLang;
   setUiLang: (lang: UiLang) => void;
 }
@@ -98,6 +98,8 @@ export default function HomeScreen({ onParagraphsReady, uiLang, setUiLang }: Pro
 
   const processImage = async (uri: string) => {
     const t0 = Date.now();
+    const ts0 = new Date().toLocaleTimeString('he-IL', { hour12: false });
+    console.log(`[${ts0}] === START processImage ===`);
     const controller = new AbortController();
     abortRef.current = controller;
     setLoading(true);
@@ -120,8 +122,11 @@ export default function HomeScreen({ onParagraphsReady, uiLang, setUiLang }: Pro
 
       setStatus(t.loaderAnalyze);
       const t1 = Date.now();
+      const tsGemini = new Date().toLocaleTimeString('he-IL', { hour12: false });
+      console.log(`[${tsGemini}] → Gemini OCR request`);
       const { paragraphs, language } = await extractParagraphs(manipulated.base64 || '', controller.signal);
-      console.log(`⏱ gemini: ${Date.now() - t1}ms`);
+      const tsGeminiDone = new Date().toLocaleTimeString('he-IL', { hour12: false });
+      console.log(`[${tsGeminiDone}] ← Gemini OCR reply: ${Date.now() - t1}ms (${paragraphs.length} paragraphs)`);
       console.log(`⏱ total to board: ${Date.now() - t0}ms`);
 
       if (paragraphs.length === 0) {
@@ -131,16 +136,18 @@ export default function HomeScreen({ onParagraphsReady, uiLang, setUiLang }: Pro
       const cacheId = Date.now().toString();
 
       // На Android — генерируем TTS аудио параллельно для всех абзацев
-      let audio: ParagraphAudio[] | undefined;
+      let audio: (ParagraphAudio | undefined)[] | undefined;
       if (Platform.OS === 'android') {
         setStatus(t.loaderAudio);
         const tTts = Date.now();
+        const tsTts = new Date().toLocaleTimeString('he-IL', { hour12: false });
+        console.log(`[${tsTts}] → TTS batch start (${paragraphs.length} paragraphs)`);
         try {
           audio = await generateAllAudio(paragraphs, cacheId);
-          console.log(`⏱ TTS: ${Date.now() - tTts}ms`);
+          const tsTtsDone = new Date().toLocaleTimeString('he-IL', { hour12: false });
+          console.log(`[${tsTtsDone}] ← TTS batch done: ${Date.now() - tTts}ms`);
         } catch (e) {
           console.warn('[TTS] Failed, continuing without audio:', e);
-          // Не блокируем — на крайний случай попробуем expo-speech как fallback
         }
       }
 

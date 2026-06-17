@@ -11,7 +11,7 @@ export interface CachedScreen {
   thumbBase64: string;
   imageBase64: string;
   paragraphs: Paragraph[];
-  audio?: ParagraphAudio[];  // Android only: per-paragraph audio with timings
+  audio?: (ParagraphAudio | undefined)[];  // Android only: per-paragraph audio with timings
   timestamp: number;
   language: string;
   title: string;
@@ -55,7 +55,7 @@ export async function saveToCache(
   images: CacheImages,
   paragraphs: Paragraph[],
   language: string = 'he',
-  audio?: ParagraphAudio[],
+  audio?: (ParagraphAudio | undefined)[],
 ): Promise<void> {
   try {
     const newItem: CachedScreen = {

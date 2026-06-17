@@ -51,7 +51,7 @@ export default function App() {
   const [timestamp, setTimestamp] = useState<number>(Date.now());
   const [currentCacheId, setCurrentCacheId] = useState<string | null>(null);
   const [isFromArchive, setIsFromArchive] = useState(false);
-  const [audio, setAudio] = useState<ParagraphAudio[] | undefined>(undefined);
+  const [audio, setAudio] = useState<(ParagraphAudio | undefined)[] | undefined>(undefined);
   const [uiLang, setUiLang] = useState<UiLang>('en');
 
   const [fontsLoaded] = useFonts({
@@ -63,7 +63,7 @@ export default function App() {
 
   const handleParagraphsReady = (
     p: Paragraph[], uri: string, lang: string, cacheId?: string, fromArchive: boolean = false,
-    audioData?: ParagraphAudio[]
+    audioData?: (ParagraphAudio | undefined)[]
   ) => {
     setParagraphs(p);
     setImageUri(uri);
