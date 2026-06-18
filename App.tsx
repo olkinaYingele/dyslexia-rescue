@@ -75,6 +75,10 @@ export default function App() {
     setScreen('board');
   };
 
+  const handleAudioReady = (audioData: (ParagraphAudio | undefined)[]) => {
+    setAudio(audioData);
+  };
+
   const handleExit = () => {
     setCurrentCacheId(null);
     setScreen('home');
@@ -93,7 +97,7 @@ export default function App() {
       <PaperProvider theme={theme}>
         <StatusBar style="dark" />
         {screen === 'home' && (
-          <HomeScreen onParagraphsReady={handleParagraphsReady} uiLang={uiLang} setUiLang={setUiLang} />
+          <HomeScreen onParagraphsReady={handleParagraphsReady} onAudioReady={handleAudioReady} uiLang={uiLang} setUiLang={setUiLang} />
         )}
         {screen === 'board' && (
           <BoardScreen

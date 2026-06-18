@@ -27,6 +27,7 @@ interface DayGroup {
 
 interface Props {
   onParagraphsReady: (paragraphs: Paragraph[], imageUri: string, language: string, cacheId?: string, fromArchive?: boolean, audio?: (ParagraphAudio | undefined)[]) => void;
+  onAudioReady: (audio: (ParagraphAudio | undefined)[]) => void;
   uiLang: UiLang;
   setUiLang: (lang: UiLang) => void;
 }
@@ -64,7 +65,7 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
   return chunks;
 }
 
-export default function HomeScreen({ onParagraphsReady, uiLang, setUiLang }: Props) {
+export default function HomeScreen({ onParagraphsReady, onAudioReady, uiLang, setUiLang }: Props) {
   const t = UI[uiLang];
   const uiRTL = uiLang === 'he';
   const [loading, setLoading] = useState(false);
@@ -111,7 +112,7 @@ export default function HomeScreen({ onParagraphsReady, uiLang, setUiLang }: Pro
         uri, [], { compress: 1, format: ImageManipulator.SaveFormat.JPEG }
       );
       const { width: w, height: h } = oriented;
-      const scale = Math.min(1800 / Math.max(w, h), 1);
+      const scale = Math.min(1200 / Math.max(w, h), 1);
       // Проход 2: resize + base64 для Gemini
       const manipulated = await ImageManipulator.manipulateAsync(
         oriented.uri,
@@ -135,32 +136,45 @@ export default function HomeScreen({ onParagraphsReady, uiLang, setUiLang }: Pro
       }
       const cacheId = Date.now().toString();
 
-      // На Android — генерируем TTS аудио параллельно для всех абзацев
-      let audio: (ParagraphAudio | undefined)[] | undefined;
-      if (Platform.OS === 'android') {
-        setStatus(t.loaderAudio);
-        const tTts = Date.now();
-        const tsTts = new Date().toLocaleTimeString('he-IL', { hour12: false });
-        console.log(`[${tsTts}] → TTS batch start (${paragraphs.length} paragraphs)`);
-        try {
-          audio = await generateAllAudio(paragraphs, cacheId);
-          const tsTtsDone = new Date().toLocaleTimeString('he-IL', { hour12: false });
-          console.log(`[${tsTtsDone}] ← TTS batch done: ${Date.now() - tTts}ms`);
-        } catch (e) {
-          console.warn('[TTS] Failed, continuing without audio:', e);
-        }
-      }
-
+      // Открываем борд сразу — TTS и кэш готовим в фоне
       setDone(true);
       await new Promise(r => setTimeout(r, 400));
-      // Открываем экран — изображения для кэша готовим в фоне
-      onParagraphsReady(paragraphs, manipulated.uri, language, cacheId, false, audio);
-      Promise.all([
-        prepareThumb(manipulated.uri),
-        prepareFullImage(manipulated.uri),
-      ]).then(([thumbBase64, imageBase64]) =>
-        saveToCache(cacheId, { thumbBase64, imageBase64 }, paragraphs, language, audio)
-      ).catch(e => console.warn('[Cache] Save failed:', e));
+      onParagraphsReady(paragraphs, manipulated.uri, language, cacheId, false, undefined);
+
+      if (Platform.OS === 'android') {
+        // Генерируем TTS в фоне; как только готово — передаём в BoardScreen и сохраняем кэш
+        const tsTts = new Date().toLocaleTimeString('he-IL', { hour12: false });
+        console.log(`[${tsTts}] → TTS batch start (${paragraphs.length} paragraphs) [background]`);
+        generateAllAudio(paragraphs, cacheId)
+          .then(async (audio) => {
+            const tsTtsDone = new Date().toLocaleTimeString('he-IL', { hour12: false });
+            console.log(`[${tsTtsDone}] ← TTS batch done [background]`);
+            onAudioReady(audio);
+            const [thumbUri, imageUri] = await Promise.all([
+              prepareThumb(manipulated.uri, cacheId),
+              prepareFullImage(manipulated.uri, cacheId),
+            ]);
+            await saveToCache(cacheId, { thumbUri, imageUri }, paragraphs, language, audio);
+          })
+          .catch(async (e) => {
+            console.warn('[TTS] Failed:', e);
+            // Сохраняем без аудио
+            try {
+              const [thumbUri, imageUri] = await Promise.all([
+                prepareThumb(manipulated.uri, cacheId),
+                prepareFullImage(manipulated.uri, cacheId),
+              ]);
+              await saveToCache(cacheId, { thumbUri, imageUri }, paragraphs, language, undefined);
+            } catch (e2) { console.warn('[Cache] Save failed:', e2); }
+          });
+      } else {
+        Promise.all([
+          prepareThumb(manipulated.uri, cacheId),
+          prepareFullImage(manipulated.uri, cacheId),
+        ]).then(([thumbUri, imageUri]) =>
+          saveToCache(cacheId, { thumbUri, imageUri }, paragraphs, language, undefined)
+        ).catch(e => console.warn('[Cache] Save failed:', e));
+      }
     } catch (e: any) {
       if (e.name === 'AbortError') return;
       console.warn('[processImage] Error:', e);
@@ -205,7 +219,7 @@ export default function HomeScreen({ onParagraphsReady, uiLang, setUiLang }: Pro
   };
 
   const openCached = (item: CachedScreen) => {
-    onParagraphsReady(item.paragraphs, `data:image/jpeg;base64,${item.imageBase64}`, item.language || 'he', item.id, true, item.audio);
+    onParagraphsReady(item.paragraphs, item.imageUri, item.language || 'he', item.id, true, item.audio);
   };
 
   const confirmDeleteDay = async (group: DayGroup) => {
@@ -328,7 +342,7 @@ export default function HomeScreen({ onParagraphsReady, uiLang, setUiLang }: Pro
                       activeOpacity={0.85}
                     >
                       <Image
-                        source={{ uri: `data:image/jpeg;base64,${item.thumbBase64}` }}
+                        source={{ uri: item.thumbUri }}
                         style={styles.gridThumb}
                       />
                       <View style={styles.gridFooter}>
