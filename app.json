@@ -6,7 +6,7 @@
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "owner": "olkina",
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -48,7 +48,8 @@
           "photosPermission": "Read to me needs photo access to pick an image with text for reading.",
           "cameraPermission": "Read to me needs camera access to photograph text for reading."
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "extra": {
       "eas": {
