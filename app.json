@@ -49,7 +49,6 @@
           "cameraPermission": "Read to me needs camera access to photograph text for reading."
         }
       ],
-      "expo-audio"
     ],
     "extra": {
       "eas": {
