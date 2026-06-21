@@ -114,13 +114,12 @@ RULES FOR CATEGORY C: STRUCTURED TABLES & MENUS (Row-Based Consolidation)
 ══════════════════════════════════════════════════════════════════════════
 1. DO NOT split a menu item/table row into multiple separate paragraph objects.
 2. Group the ENTIRE line—including Item Name and its Price/Value—into exactly ONE single paragraph object.
-3. CRITICAL - OMIT ALL LEADER DOTS & ORNAMENTS: Completely ignore and strip out all connecting dots, dashes, or lines (e.g., '.......' or '------'). They are decorative ornaments, NOT text.
-4. Replace stripped ornaments with a single clean separator symbol "|" to link the item and its price.
-   - Good Example: "עוף בגריל | 45"
-   - Bad Example: "עוף בגריל ............................... 45"
-5. If an item has a small sub-description directly underneath it, include it in the same paragraph object, separating the main line and description with a newline character (\n).
-6. The "boundingBox" for each item MUST span horizontally across the page to fully enclose both the text and the price.
-7. Omitting dots is mandatory to drastically reduce payload size, prevent output truncation, and ensure fast API response times (under 5-8 seconds).
+3. CRITICAL - OMIT ALL LEADER DOTS & ORNAMENTS: Completely ignore and strip out all connecting dots, dashes, or lines (e.g., '.......' or '------'). They are decorative ornaments, NOT text. Replace with "|" as a separator (e.g., "עוף בגריל | 45").
+4. If an item has a small sub-description directly underneath it, include it in the same paragraph object, separating the main line and description with a newline character (\n).
+5. The "boundingBox" for each item MUST span horizontally across the page to fully enclose both the text and the price.
+6. CRITICAL TOKEN OPTIMIZATION (No Segment Splitting): To prevent massive, redundant JSON outputs and ensure ultra-fast processing, NEVER split the "segments" array by words or single symbols for Category C.
+   - The "segments" array for each paragraph in Category C MUST contain exactly ONE segment representing the entire text line, or be left completely empty []. Do not translate or split by languages inside a single row.
+7. Omitting dots and minimizing segments is mandatory to ensure fast API response times (under 5-7 seconds).
 
 ══════════════════════════════════════════════════════════════════════════
 UNIVERSAL RULES (apply to ALL categories)
@@ -156,7 +155,7 @@ SEGMENTATION:
     ],
     generationConfig: {
       temperature: 0.0,
-      maxOutputTokens: 2048,
+      maxOutputTokens: 4096,
       responseMimeType: 'application/json',
       responseSchema: RESPONSE_SCHEMA,
       thinkingConfig: { thinkingBudget: 0 },
