@@ -79,9 +79,9 @@ export async function extractParagraphs(base64: string, signal?: AbortSignal): P
 
 CRITICAL STEP 0 — PRE-CLASSIFICATION (Internal Logic):
 Before performing OCR or calculating boundaries, visually evaluate the image:
-- CATEGORY A (printed_document): If the image is a scanned page, book, formal contract, printed form, or typed text in standard linear paragraphs/columns.
-- CATEGORY B (whiteboard): If the image is a physical/digital whiteboard, notebook page, hand-drawn mind map, schematic with arrows, diagrams, or scattered handwritten notes.
-- CATEGORY C (menu_table): If the image is a restaurant menu, price list, product catalog, or any structured table where rows contain: name + optional description + price (or similar columnar data per row). NOT a whiteboard, NOT a handwritten schedule, NOT a dated list — even if it has columns.
+- CATEGORY A (printed_document): If the image is a scanned page, book, formal contract, printed form, or typed text in standard linear paragraphs/columns. MUST be printed/typed, NOT handwritten.
+- CATEGORY B (whiteboard): If the image contains ANY handwritten text, whiteboard notes, chalkboard notes, notebook pages, hand-drawn mind maps, or lists written by hand (even if they look like tables, schedules, or have column structures). ANY handwritten content MUST go here.
+- CATEGORY C (menu_table): If the image is a printed/typed restaurant menu, printed price list, printed product catalog, or any typed structured table with columnar data. MUST be printed/typed, NOT handwritten.
 
 Based on this classification, apply ONLY the corresponding ruleset below:
 
