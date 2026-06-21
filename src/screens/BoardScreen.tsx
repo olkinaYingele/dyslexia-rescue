@@ -593,15 +593,32 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
     setCurrentWordIndex(-1);
   };
 
-  // Double-tap to reset zoom — but not after a pinch
-  const handleDoubleTap = () => {
+  // Double-tap to reset zoom; single-tap on empty area closes bottom panel
+  const handleDoubleTap = (e: any) => {
     if (isPinching.current) return;
     const now = Date.now();
     if (now - lastTapTime.current < 350) {
       resetZoom();
       lastTapTime.current = 0;
-    } else {
-      lastTapTime.current = now;
+      return;
+    }
+    lastTapTime.current = now;
+
+    // Single tap — check if it landed on a paragraph box
+    const rendered = getRenderedRect();
+    if (!rendered || !activeParagraph) return;
+    const touchX = e.nativeEvent.locationX;
+    const touchY = e.nativeEvent.locationY;
+    const hitsParagraph = paragraphs.some(p => {
+      const left  = rendered.oX + p.box.x * rendered.rW;
+      const top   = rendered.oY + p.box.y * rendered.rH;
+      const w     = Math.max(p.box.width  * rendered.rW, 80);
+      const h     = Math.max(p.box.height * rendered.rH, 44);
+      return touchX >= left && touchX <= left + w && touchY >= top && touchY <= top + h;
+    });
+    if (!hitsParagraph) {
+      stopReading();
+      setActiveParagraph(null);
     }
   };
 
@@ -667,7 +684,7 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
                 style={[
                   styles.box,
                   { left, top, width, height, borderColor: color },
-                  isActive && { backgroundColor: `${color}22`, borderWidth: 3 },
+                  isActive && { backgroundColor: `${color}55`, borderWidth: 3.5 },
                 ]}
                 onPress={() => {
                   if (isActive) {
@@ -690,33 +707,40 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
       </View>
 
       {/* Bottom panel */}
-      {activeParagraph && (
-        <View style={styles.bottomPanel}>
-          <ScrollView style={styles.wordBox} showsVerticalScrollIndicator={false}>
-            <Text style={[styles.wordLine, isRTL ? styles.textRTL : styles.textLTR]}>
-              {words.map((word, i) => (
-                <Text key={i}>
-                  {lineBreaks.has(i) ? '\n' : (i > 0 ? ' ' : '')}
-                  <Text style={[styles.word, i === currentWordIndex && styles.activeWord]}>
-                    {word}
-                  </Text>
-                </Text>
-              ))}
-            </Text>
-          </ScrollView>
+      {activeParagraph && (() => {
+        const activeColor = COLORS[activeParagraph.index % COLORS.length];
+        return (
+          <View style={styles.bottomPanel}>
+            <View style={[styles.panelBadge, { backgroundColor: activeColor }]}>
+              <Text style={styles.panelBadgeText}>{activeParagraph.index + 1}</Text>
+            </View>
 
-          <TouchableOpacity
-            style={styles.playBtn}
-            onPress={() => {
-              if (isPlaying) pauseReading();
-              else if (isPaused) resumeReading();
-              else startReading(activeParagraph);
-            }}
-          >
-            <Feather name={isPlaying ? 'pause' : 'play'} size={22} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-      )}
+            <ScrollView style={styles.wordBox} showsVerticalScrollIndicator={false}>
+              <Text style={[styles.wordLine, isRTL ? styles.textRTL : styles.textLTR]}>
+                {words.map((word, i) => (
+                  <Text key={i}>
+                    {lineBreaks.has(i) ? '\n' : (i > 0 ? ' ' : '')}
+                    <Text style={[styles.word, i === currentWordIndex && styles.activeWord]}>
+                      {word}
+                    </Text>
+                  </Text>
+                ))}
+              </Text>
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[styles.playBtn, { backgroundColor: activeColor }]}
+              onPress={() => {
+                if (isPlaying) pauseReading();
+                else if (isPaused) resumeReading();
+                else startReading(activeParagraph);
+              }}
+            >
+              <Feather name={isPlaying ? 'pause' : 'play'} size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        );
+      })()}
       {/* Delete confirmation modal */}
       <Modal visible={showDeleteModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
@@ -817,6 +841,24 @@ const styles = StyleSheet.create({
     maxHeight: '42%',
     flexDirection: 'row',
     alignItems: 'stretch',
+  },
+  panelBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  panelBadgeText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
   },
   wordBox: {
     flex: 1,
