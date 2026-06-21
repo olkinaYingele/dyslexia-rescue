@@ -39,12 +39,12 @@ const RESPONSE_SCHEMA = {
           boundingBox: {
             type: 'object',
             properties: {
-              top:    { type: 'number' },
-              left:   { type: 'number' },
-              width:  { type: 'number' },
-              height: { type: 'number' },
+              ymin: { type: 'number' },
+              xmin: { type: 'number' },
+              ymax: { type: 'number' },
+              xmax: { type: 'number' },
             },
-            required: ['top', 'left', 'width', 'height'],
+            required: ['ymin', 'xmin', 'ymax', 'xmax'],
           },
           segments: {
             type: 'array',
@@ -134,7 +134,7 @@ TEXT ACCURACY:
 BOUNDING BOX ANTI-GHOSTING:
 - ONLY output boxes for VISIBLE INK. Do NOT generate phantom boxes in empty margins or blank space.
 - Stop bounding exactly where the ink ends. Every box must correspond 1:1 to real visible text.
-- Return all coordinates in 0–1000 scale (0 = top/left edge, 1000 = bottom/right edge).
+- Return all coordinates as [ymin, xmin, ymax, xmax] in 0–1000 scale (0 = top/left edge, 1000 = bottom/right edge).
 
 SEGMENTATION:
 - For EACH paragraph, return "segments": split by language ONLY when actual foreign WORDS are present (e.g. "WhatsApp" inside Hebrew text).
@@ -150,7 +150,7 @@ SEGMENTATION:
       {
         parts: [
           { inline_data: { mime_type: 'image/jpeg', data: base64 } },
-          { text: 'Classify image (Category A: printed document, Category B: whiteboard/handwritten, Category C: menu/price list/table), then apply the matching ruleset. Transcribe every word exactly. Return bounding boxes in 0–1000 scale.' },
+          { text: 'Classify image (Category A: printed document, Category B: whiteboard/handwritten, Category C: menu/price list/table), then apply the matching ruleset. Transcribe every word exactly. Return bounding boxes as ymin/xmin/ymax/xmax in 0–1000 scale.' },
         ],
       },
     ],
@@ -259,10 +259,10 @@ SEGMENTATION:
       return {
         text,
         box: {
-          x:      (item.boundingBox?.left   ?? 0) / 1000,
-          y:      (item.boundingBox?.top    ?? 0) / 1000,
-          width:  (item.boundingBox?.width  ?? 0) / 1000,
-          height: (item.boundingBox?.height ?? 0) / 1000,
+          x:      (item.boundingBox?.xmin ?? 0) / 1000,
+          y:      (item.boundingBox?.ymin ?? 0) / 1000,
+          width:  ((item.boundingBox?.xmax ?? 0) - (item.boundingBox?.xmin ?? 0)) / 1000,
+          height: ((item.boundingBox?.ymax ?? 0) - (item.boundingBox?.ymin ?? 0)) / 1000,
         },
         segments,
       };
