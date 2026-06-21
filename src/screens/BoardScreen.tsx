@@ -246,6 +246,7 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
   const lastTapTime = useRef(0);
   // Flag to suppress double-tap after a pinch
   const isPinching = useRef(false);
+  const boxTappedRef = useRef(false);
 
   useEffect(() => {
     // Конфигурируем аудио: не играть в фоне (по умолчанию iOS может продолжать)
@@ -594,32 +595,23 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
   };
 
   // Double-tap to reset zoom; single-tap on empty area closes bottom panel
-  const handleDoubleTap = (e: any) => {
+  const handleDoubleTap = () => {
     if (isPinching.current) return;
     const now = Date.now();
     if (now - lastTapTime.current < 350) {
       resetZoom();
       lastTapTime.current = 0;
+      boxTappedRef.current = false;
       return;
     }
     lastTapTime.current = now;
 
-    // Single tap — check if it landed on a paragraph box
-    const rendered = getRenderedRect();
-    if (!rendered || !activeParagraph) return;
-    const touchX = e.nativeEvent.locationX;
-    const touchY = e.nativeEvent.locationY;
-    const hitsParagraph = paragraphs.some(p => {
-      const left  = rendered.oX + p.box.x * rendered.rW;
-      const top   = rendered.oY + p.box.y * rendered.rH;
-      const w     = Math.max(p.box.width  * rendered.rW, 80);
-      const h     = Math.max(p.box.height * rendered.rH, 44);
-      return touchX >= left && touchX <= left + w && touchY >= top && touchY <= top + h;
-    });
-    if (!hitsParagraph) {
+    // Single tap on empty area (no box was tapped) → close bottom panel
+    if (!boxTappedRef.current && activeParagraph) {
       stopReading();
       setActiveParagraph(null);
     }
+    boxTappedRef.current = false;
   };
 
   const rendered = getRenderedRect();
@@ -686,11 +678,11 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
                   { left, top, width, height, borderColor: color },
                   isActive && { backgroundColor: `${color}55`, borderWidth: 3.5 },
                 ]}
+                onPressIn={() => { boxTappedRef.current = true; }}
                 onPress={() => {
                   if (isActive) {
                     if (isPlaying) pauseReading();
-                    else if (isPaused) resumeReading();
-                    else startReading(p);
+                    else resumeReading();
                   } else {
                     startReading(p);
                   }
@@ -735,7 +727,7 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
                   else startReading(activeParagraph);
                 }}
               >
-                <Feather name={isPlaying ? 'pause' : 'play'} size={18} color="#FFFFFF" />
+                <Feather name={isPlaying ? 'pause' : 'play'} size={22} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
           </View>
@@ -869,11 +861,11 @@ const styles = StyleSheet.create({
   },
   panelPlayBtn: {
     position: 'absolute',
-    top: -10,
+    top: -18,
     right: 10,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
