@@ -76,15 +76,29 @@ export async function extractParagraphs(base64: string, signal?: AbortSignal): P
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
   const systemInstruction = `PERFORM A STRICT LITERAL OCR. Identify all text in the image and split it into logical paragraphs.
-CRITICAL RULES — follow exactly:
-- Transcribe text WORD FOR WORD, exactly as written. Do NOT paraphrase, summarize, auto-correct, or replace words with synonyms.
-- NEVER translate text. DO NOT mix meanings or words between different lines or different languages on the page (e.g., do not inject the translation of a Russian word into an adjacent Hebrew line).
-- Treat EVERY word as an isolated visual symbol. Act strictly as a blind mechanical scanner. Do NOT use semantic context from surrounding sentences to guess words.
+
+CRITICAL TEXT RULES:
+- Transcribe text WORD FOR WORD, exactly as written. Do NOT paraphrase, summarize, auto-correct, or replace words.
+- NEVER translate text. DO NOT mix meanings or words between different lines or different languages on the page.
+- Treat EVERY word as an isolated visual symbol. Act strictly as a blind mechanical scanner.
 - If the image says "דמקה, שש בש, מטקות" — return exactly that. Never invent "משחקי קופסא" or any other generalization.
-- A heading + its lines = ONE paragraph. A list or schedule = ONE paragraph.
-- Detect the primary language of the document and return its ISO code (e.g. "he", "en", "ru", "de").
-- For EACH paragraph, return "segments": split the paragraph text by language ONLY when there are actual foreign WORDS (real words from another language, like "WhatsApp" inside Hebrew text, or "deadline" inside German text).
-- DO NOT create a separate segment for: digits, numbers, times like "13:54", dates like "25.05.2024", percentages, prices, punctuation, emojis, or URLs. These ALWAYS inherit the surrounding language.
+- Detect the primary language of the document and return its ISO code (e.g. "he", "en", "ru").
+
+LAYOUT AND SPATIAL RULES (CRITICAL):
+Step 1: Analyze the visual structure of the image before extracting text. Is it a structured document (like a contract with tables) or unstructured (like a whiteboard with scattered notes)?
+Step 2: Apply the correct extraction strategy:
+- IF IT IS A TABLE/GRID (like cancellation fees): You MUST read horizontally, ROW BY ROW. Combine the left column and the right column into ONE single paragraph. Draw ONE bounding box that spans the entire row horizontally. NEVER group data by vertical columns.
+- IF IT IS A WHITEBOARD / UNSTRUCTURED TEXT: Group text by spatial proximity. Treat each distinct visual cluster or isolated note as a separate paragraph with its own tight bounding box. Do not combine clusters that are far apart.
+
+BOUNDING BOX STRICTNESS & ANTI-GHOSTING:
+- ONLY output bounding boxes for VISIBLE INK. You must tightly wrap the physical characters.
+- DO NOT generate "phantom" boxes in empty margins, footers, or at the bottom of the page. If there is no physical text there, DO NOT output any text or coordinates.
+- Stop bounding exactly where the paragraph's ink ends. NEVER extend a bounding box down into blank, empty space.
+- Every bounding box must correspond exactly 1:1 to real, visible text on the page.
+
+SEGMENTATION RULES:
+- For EACH paragraph, return "segments": split the paragraph text by language ONLY when there are actual foreign WORDS (real words from another language, like "WhatsApp" inside Hebrew text).
+- DO NOT create a separate segment for numbers, times, percentages, prices, or punctuation. These inherit the surrounding language.
 - If the entire paragraph is in one language (with numbers/punctuation inside), return ONE segment covering the full text.
 - The concatenation of all segments' text MUST equal the paragraph text exactly, character by character including whitespace.
 - Use ISO 639-1 codes: 'he' (Hebrew), 'en' (English), 'ru' (Russian), 'de' (German), 'fr' (French), 'es' (Spanish), 'it' (Italian), 'ar' (Arabic), etc.
@@ -96,7 +110,7 @@ CRITICAL RULES — follow exactly:
       {
         parts: [
           { inline_data: { mime_type: 'image/jpeg', data: base64 } },
-          { text: 'STRICT LITERAL OCR: transcribe every word exactly as written. Split into logical paragraphs. For each paragraph, also split into language segments. Return bounding boxes in 0–1000 scale.' },
+          { text: 'STRICT LITERAL OCR: transcribe every word exactly as written. For tables: read ROW BY ROW, one paragraph per row. For unstructured text: group by spatial proximity. Return bounding boxes in 0–1000 scale.' },
         ],
       },
     ],
