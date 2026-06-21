@@ -249,12 +249,15 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
   const boxTappedRef = useRef(false);
 
   // Animated values for zoom-compensated border and badge
-  const _av1   = useRef(new Animated.Value(1)).current;
   const _av2   = useRef(new Animated.Value(2)).current;
   const _av35  = useRef(new Animated.Value(3.5)).current;
-  const inverseScaleAnim  = useRef(Animated.divide(_av1,  scaleAnim)).current;
+  const _av26  = useRef(new Animated.Value(26)).current;
+  const _av13  = useRef(new Animated.Value(13)).current;
   const normalBorderAnim  = useRef(Animated.divide(_av2,  scaleAnim)).current;
   const activeBorderAnim  = useRef(Animated.divide(_av35, scaleAnim)).current;
+  const badgeSizeAnim     = useRef(Animated.divide(_av26, scaleAnim)).current;
+  const badgeRadiusAnim   = useRef(Animated.divide(_av13, scaleAnim)).current;
+  const badgeFontAnim     = useRef(Animated.divide(_av13, scaleAnim)).current;
 
   useEffect(() => {
     // Конфигурируем аудио: не играть в фоне (по умолчанию iOS может продолжать)
@@ -706,15 +709,21 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
                     },
                   ]}
                 />
-                {/* Badge — counter-scaled so it stays the same visual size */}
+                {/* Badge — size and font scale down with zoom to stay visually constant */}
                 <Animated.View
                   style={[
                     styles.badge,
-                    { backgroundColor: color },
-                    { transform: [{ scale: inverseScaleAnim }] },
+                    {
+                      backgroundColor: color,
+                      width: badgeSizeAnim,
+                      height: badgeSizeAnim,
+                      borderRadius: badgeRadiusAnim,
+                    },
                   ]}
                 >
-                  <Text style={styles.badgeText}>{isActive && isPlaying ? '⏸' : i + 1}</Text>
+                  <Animated.Text style={[styles.badgeText, { fontSize: badgeFontAnim }]}>
+                    {isActive && isPlaying ? '⏸' : i + 1}
+                  </Animated.Text>
                 </Animated.View>
               </TouchableOpacity>
             );
