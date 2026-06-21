@@ -81,6 +81,7 @@ CRITICAL STEP 0 — PRE-CLASSIFICATION (Internal Logic):
 Before performing OCR or calculating boundaries, visually evaluate the image:
 - CATEGORY A (printed_document): If the image is a scanned page, book, formal contract, printed form, or typed text in standard linear paragraphs/columns.
 - CATEGORY B (whiteboard): If the image is a physical/digital whiteboard, notebook page, hand-drawn mind map, schematic with arrows, diagrams, or scattered handwritten notes.
+- CATEGORY C (menu_table): If the image is a restaurant menu, price list, product catalog, or any structured table where rows contain: name + optional description + price (or similar columnar data per row).
 
 Based on this classification, apply ONLY the corresponding ruleset below:
 
@@ -109,7 +110,21 @@ RULES FOR CATEGORY B: WHITEBOARD & SCHEMATICS (Spatial Clustering Mode)
 4. Ensure "boundingBox" parameters tightly wrap ONLY that specific local cluster, node, or single scheduled row. Prevent massive overlapping bounding boxes.
 
 ══════════════════════════════════════════════════════════════════════════
-UNIVERSAL RULES (apply to BOTH categories)
+RULES FOR CATEGORY C: MENU / PRICE LIST / STRUCTURED TABLE (Row Consolidation Mode)
+══════════════════════════════════════════════════════════════════════════
+*** CARDINAL RULE: ONE ROW = ONE OBJECT. ***
+Each logical row (dish name + description + price, or product + price, etc.) MUST be collapsed into a SINGLE paragraph object. NEVER split a single menu row into multiple objects.
+
+1. Scan the table horizontally, row by row, left to right.
+2. For each row: concatenate all visible cell text into ONE "text" string, separated by " | " (pipe with spaces). Example: "שניצל עוף | פילה עוף בציפוי פנקו, מוגש עם תוספת | ₪58"
+3. The "boundingBox" must span the FULL horizontal width of that row and tightly wrap its vertical height only.
+4. Section headers (e.g., "מנות עיקריות", "קינוחים") are standalone objects — one object per header.
+5. NEVER group multiple rows together into one object, even if they share a visual section.
+6. NEVER split a single row across multiple objects because columns are spaced apart.
+7. Token conservation: be concise. Output only what is visible. Do not add explanatory text.
+
+══════════════════════════════════════════════════════════════════════════
+UNIVERSAL RULES (apply to ALL categories)
 ══════════════════════════════════════════════════════════════════════════
 TEXT ACCURACY:
 - Transcribe text WORD FOR WORD, exactly as written. Do NOT paraphrase, summarize, auto-correct, or generalize.
@@ -136,7 +151,7 @@ SEGMENTATION:
       {
         parts: [
           { inline_data: { mime_type: 'image/jpeg', data: base64 } },
-          { text: 'Classify image (printed document or whiteboard), then apply the matching ruleset. Transcribe every word exactly. Return bounding boxes in 0–1000 scale.' },
+          { text: 'Classify image (Category A: printed document, Category B: whiteboard/handwritten, Category C: menu/price list/table), then apply the matching ruleset. Transcribe every word exactly. Return bounding boxes in 0–1000 scale.' },
         ],
       },
     ],
@@ -183,7 +198,8 @@ SEGMENTATION:
     throw new Error('EMPTY_RESPONSE');
   }
 
-  const parsed = JSON.parse(content);
+  const cleanContent = content.replace(/```json|```/g, '').trim();
+  const parsed = JSON.parse(cleanContent);
   const boxes = parsed.paragraphs || [];
   const language = parsed.documentLanguage || 'he';
 
