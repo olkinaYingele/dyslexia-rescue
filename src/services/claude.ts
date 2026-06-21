@@ -110,18 +110,17 @@ RULES FOR CATEGORY B: WHITEBOARD & SCHEMATICS (Spatial Clustering Mode)
 4. Ensure "boundingBox" parameters tightly wrap ONLY that specific local cluster, node, or single scheduled row. Prevent massive overlapping bounding boxes.
 
 ══════════════════════════════════════════════════════════════════════════
-RULES FOR CATEGORY C: MENU / PRICE LIST / STRUCTURED TABLE (Row Consolidation Mode)
+RULES FOR CATEGORY C: STRUCTURED TABLES & MENUS (Row-Based Consolidation)
 ══════════════════════════════════════════════════════════════════════════
-*** CARDINAL RULE: ONE ROW = ONE OBJECT. ***
-Each logical row (dish name + description + price, or product + price, etc.) MUST be collapsed into a SINGLE paragraph object. NEVER split a single menu row into multiple objects.
-
-1. Scan the table horizontally, row by row, left to right.
-2. For each row: concatenate all visible cell text into ONE "text" string, separated by " | " (pipe with spaces). Example: "שניצל עוף | פילה עוף בציפוי פנקו, מוגש עם תוספת | ₪58"
-3. The "boundingBox" must span the FULL horizontal width of that row and tightly wrap its vertical height only.
-4. Section headers (e.g., "מנות עיקריות", "קינוחים") are standalone objects — one object per header.
-5. NEVER group multiple rows together into one object, even if they share a visual section.
-6. NEVER split a single row across multiple objects because columns are spaced apart.
-7. Token conservation: be concise. Output only what is visible. Do not add explanatory text.
+1. DO NOT split a menu item/table row into multiple separate paragraph objects.
+2. Group the ENTIRE line—including Item Name and its Price/Value—into exactly ONE single paragraph object.
+3. CRITICAL - OMIT ALL LEADER DOTS & ORNAMENTS: Completely ignore and strip out all connecting dots, dashes, or lines (e.g., '.......' or '------'). They are decorative ornaments, NOT text.
+4. Replace stripped ornaments with a single clean separator symbol "|" to link the item and its price.
+   - Good Example: "עוף בגריל | 45"
+   - Bad Example: "עוף בגריל ............................... 45"
+5. If an item has a small sub-description directly underneath it, include it in the same paragraph object, separating the main line and description with a newline character (\n).
+6. The "boundingBox" for each item MUST span horizontally across the page to fully enclose both the text and the price.
+7. Omitting dots is mandatory to drastically reduce payload size, prevent output truncation, and ensure fast API response times (under 5-8 seconds).
 
 ══════════════════════════════════════════════════════════════════════════
 UNIVERSAL RULES (apply to ALL categories)
@@ -156,8 +155,8 @@ SEGMENTATION:
       },
     ],
     generationConfig: {
-      temperature: 0.1,
-      maxOutputTokens: 8192,
+      temperature: 0.0,
+      maxOutputTokens: 2048,
       responseMimeType: 'application/json',
       responseSchema: RESPONSE_SCHEMA,
       thinkingConfig: { thinkingBudget: 0 },
