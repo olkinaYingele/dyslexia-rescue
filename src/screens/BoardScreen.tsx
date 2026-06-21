@@ -33,7 +33,7 @@ interface Props {
   audio?: (ParagraphAudio | undefined)[];  // Android: pre-generated TTS audio (undefined = generation failed for this paragraph, will fallback to expo-speech)
 }
 
-const COLORS = ['#E05A46', '#E07D3C', '#E8A828', '#3DAB5A', '#30B898', '#2E90CC', '#7848A8', '#E84878'];
+const COLORS = ['#E05A46', '#E07D3C', '#E8A828', '#3DAB5A', '#30B898', '#2F628C', '#7848A8', '#E84878'];
 
 function parseWords(text: string): { words: string[]; lineBreaks: Set<number> } {
   const lines = text.split('\n');
@@ -776,7 +776,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#2E90CC',
+    backgroundColor: '#2F628C',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
@@ -969,7 +969,7 @@ const styles = StyleSheet.create({
     color: '#42474E',
   },
   modalBtnDelete: {
-    backgroundColor: '#2E90CC',
+    backgroundColor: '#2F628C',
   },
   modalBtnDeleteText: {
     fontSize: 16,
@@ -981,7 +981,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: '#2E90CC',
+    backgroundColor: '#2F628C',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
