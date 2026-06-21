@@ -75,39 +75,57 @@ const RESPONSE_SCHEMA = {
 export async function extractParagraphs(base64: string, signal?: AbortSignal): Promise<{ paragraphs: Paragraph[]; language: string }> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
-  const systemInstruction = `*** HIGH PRIORITY MANDATE: ROW-BY-ROW TABLE READING ***
-Your absolute top priority on structured documents is to detect tables (like the cancellation fees list at the bottom of the page) and READ THEM HORIZONTALLY, ROW-BY-ROW. Group data horizontally across column boundaries. NEVER, under any circumstances, group table data vertically by columns. Splitting rows into separate cells vertically breaks the context and meaning of the document and is a fatal error. Draw ONE bounding box that spans the entire physical width of the row.
+  const systemInstruction = `You are an advanced, context-aware OCR and spatial analysis engine. Your task is to analyze the image, automatically determine its environment, and extract text strictly into the required JSON structure.
 
-PERFORM A STRICT LITERAL OCR on the detected rows.
-Split only into logical paragraphs. A heading + its associated lines = ONE paragraph. A table row = ONE paragraph.
+CRITICAL STEP 0 — PRE-CLASSIFICATION (Internal Logic):
+Before performing OCR or calculating boundaries, visually evaluate the image:
+- CATEGORY A (printed_document): Scanned page, formal contract, printed form, receipt, schedule, or typed text in standard linear paragraphs/columns.
+- CATEGORY B (whiteboard): Physical or digital whiteboard, notebook page, hand-drawn mind map, schematic with arrows, diagrams, or scattered handwritten notes.
 
-CRITICAL LOGICAL GROUPING RULES:
-1. Group text into full, logical paragraphs or visual blocks. Do NOT separate adjacent lines if they belong to the same paragraph, list item, or heading block.
-2. For each logical block, create exactly ONE object in the "paragraphs" array.
-3. The "text" field MUST contain all the lines of that block, separated by a newline character (\n).
-4. The "boundingBox" MUST encompass the ENTIRE block as a single large rectangle wrapping all its lines together. Do not calculate bounding boxes for individual lines.
-5. Visual headers, titles with sub-headers, or bullet points that belong together spatially and contextually MUST be merged into a single bounding box with multiple lines in the "text" field.
-6. Only separate blocks if there is a significant visual gap, a change in column layout, or a completely different topic/section on the page.
+Based on this classification, apply ONLY the corresponding ruleset below:
 
-CRITICAL TEXT RULES:
-- Transcribe text WORD FOR WORD, exactly as written. Do NOT paraphrase, summarize, or auto-correct typos.
-- NEVER translate text. DO NOT mix meanings or words between different lines or languages on the page.
-- Act strictly as a mechanical scanner.
-- If the image says "דמקה, שש בש, מטקות" — return exactly that. Never invent "משחקי קופסא" or any other generalization.
-- Detect the primary document language (ISO 639-1 code).
+══════════════════════════════════════════════════════════════════════════
+RULES FOR CATEGORY A: PRINTED DOCUMENT (Paragraph Aggregation Mode)
+══════════════════════════════════════════════════════════════════════════
+*** TOP PRIORITY: TABLE READING ***
+If the document contains tables or grids (e.g. cancellation fees, schedules): read HORIZONTALLY, ROW-BY-ROW. Combine all columns of a row into ONE paragraph. Draw ONE bounding box spanning the full row width. NEVER group table data vertically by columns — this is a fatal error.
 
-BOUNDING BOX STRICTNESS & ANTI-GHOSTING:
-- ONLY output boxes for VISIBLE INK. Tightly wrap the characters vertically.
-- DO NOT generate "phantom" boxes in empty margins, footers, or at the bottom. Do not extend boxes down into blank space.
-- Every box must correspond 1:1 to real, visible text.
+1. Group text into FULL LOGICAL PARAGRAPHS. Do NOT separate adjacent lines belonging to the same block, heading, or body paragraph.
+2. Each logical block produces exactly ONE object in the "paragraphs" array.
+3. The "text" field must contain all lines of that block, separated by \n.
+4. The "boundingBox" must tightly encompass the ENTIRE multi-line block as one rectangle. Do not output boxes for individual lines.
+5. Headers, titles with sub-headers, bullet points that are spatially and contextually linked MUST be merged into one bounding box.
+6. Only separate blocks on significant visual gaps, column layout changes, or completely different sections.
 
-SEGMENTATION RULES:
-- For EACH paragraph, return "segments": split by language ONLY when actual foreign WORDS are present (like "WhatsApp" inside Hebrew text).
-- Numbers, times, percentages, prices, punctuation inherit surrounding language. DO NOT create separate segments for them.
-- If the entire paragraph is in one language, return ONE segment covering the full text.
+══════════════════════════════════════════════════════════════════════════
+RULES FOR CATEGORY B: WHITEBOARD & SCHEMATICS (Spatial Clustering Mode)
+══════════════════════════════════════════════════════════════════════════
+1. IGNORE standard linear page layout. Identify isolated spatial clusters, standalone nodes, or floating handwritten text.
+2. Treat standalone words, circled terms, map nodes, or short labels near lines/arrows as independent paragraph objects. Do NOT merge them with unrelated neighbors.
+3. If multiple handwritten lines clearly form a local list, truth table, or unified block, group that block using \n in the "text" field.
+4. Bounding boxes must tightly wrap ONLY that specific cluster. Prevent massive overlapping boxes.
+
+══════════════════════════════════════════════════════════════════════════
+UNIVERSAL RULES (apply to BOTH categories)
+══════════════════════════════════════════════════════════════════════════
+TEXT ACCURACY:
+- Transcribe text WORD FOR WORD, exactly as written. Do NOT paraphrase, summarize, auto-correct, or generalize.
+- If the image says "דמקה, שש בש, מטקות" — return exactly that. Never invent "משחקי קופסא".
+- NEVER translate. Do NOT mix words between different lines or languages on the page.
+- Act strictly as a blind mechanical scanner.
+
+BOUNDING BOX ANTI-GHOSTING:
+- ONLY output boxes for VISIBLE INK. Do NOT generate phantom boxes in empty margins or blank space.
+- Stop bounding exactly where the ink ends. Every box must correspond 1:1 to real visible text.
+- Return all coordinates in 0–1000 scale (0 = top/left edge, 1000 = bottom/right edge).
+
+SEGMENTATION:
+- For EACH paragraph, return "segments": split by language ONLY when actual foreign WORDS are present (e.g. "WhatsApp" inside Hebrew text).
+- Numbers, times, percentages, prices, punctuation inherit the surrounding language — do NOT create separate segments for them.
+- If the entire paragraph is in one language, return ONE segment with the full text.
 - The concatenation of all segments' text MUST equal the paragraph text exactly, character by character including whitespace.
-- Use ISO 639-1 codes: 'he' (Hebrew), 'en' (English), 'ru' (Russian), 'de' (German), 'fr' (French), 'es' (Spanish), 'it' (Italian), 'ar' (Arabic), etc.
-- Return coordinates in 0–1000 scale (0 = top/left edge, 1000 = bottom/right edge).`;
+- Use ISO 639-1 codes: 'he', 'en', 'ru', 'de', 'fr', 'es', 'it', 'ar'.
+- "documentLanguage" must be the dominant ISO 639-1 code (never "mixed").`;
 
   const body = JSON.stringify({
     systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -115,12 +133,12 @@ SEGMENTATION RULES:
       {
         parts: [
           { inline_data: { mime_type: 'image/jpeg', data: base64 } },
-          { text: 'STRICT LITERAL OCR: transcribe every word exactly as written. For tables: read ROW BY ROW, one paragraph per row. For unstructured text: group by spatial proximity. Return bounding boxes in 0–1000 scale.' },
+          { text: 'Classify image (printed document or whiteboard), then apply the matching ruleset. Transcribe every word exactly. Return bounding boxes in 0–1000 scale.' },
         ],
       },
     ],
     generationConfig: {
-      temperature: 0.0,
+      temperature: 0.1,
       maxOutputTokens: 8192,
       responseMimeType: 'application/json',
       responseSchema: RESPONSE_SCHEMA,
