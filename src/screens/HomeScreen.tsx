@@ -163,17 +163,16 @@ export default function HomeScreen({ onParagraphsReady, onAudioReady, uiLang, se
               prepareThumb(manipulated.uri, cacheId),
               prepareFullImage(manipulated.uri, cacheId),
             ]);
-            await saveToCache(cacheId, { thumbUri, imageUri }, paragraphs, language, audio);
+            await saveToCache(cacheId, { thumbUri, imageUri }, paragraphs, language, audio, category);
           })
           .catch(async (e) => {
             console.warn('[TTS] Failed:', e);
-            // Сохраняем без аудио
             try {
               const [thumbUri, imageUri] = await Promise.all([
                 prepareThumb(manipulated.uri, cacheId),
                 prepareFullImage(manipulated.uri, cacheId),
               ]);
-              await saveToCache(cacheId, { thumbUri, imageUri }, paragraphs, language, undefined);
+              await saveToCache(cacheId, { thumbUri, imageUri }, paragraphs, language, undefined, category);
             } catch (e2) { console.warn('[Cache] Save failed:', e2); }
           });
       } else {
@@ -181,7 +180,7 @@ export default function HomeScreen({ onParagraphsReady, onAudioReady, uiLang, se
           prepareThumb(manipulated.uri, cacheId),
           prepareFullImage(manipulated.uri, cacheId),
         ]).then(([thumbUri, imageUri]) =>
-          saveToCache(cacheId, { thumbUri, imageUri }, paragraphs, language, undefined)
+          saveToCache(cacheId, { thumbUri, imageUri }, paragraphs, language, undefined, category)
         ).catch(e => console.warn('[Cache] Save failed:', e));
       }
     } catch (e: any) {
@@ -376,7 +375,14 @@ export default function HomeScreen({ onParagraphsReady, onAudioReady, uiLang, se
                         {item.title ? (
                           <Text style={[styles.gridTitle, uiRTL ? null : { textAlign: 'left' }]} numberOfLines={1}>{item.title}</Text>
                         ) : null}
-                        <Text style={[styles.gridDate, uiRTL ? null : { textAlign: 'left' }]}>{formatTime(item.timestamp)}</Text>
+                        <View style={styles.gridMeta}>
+                          <Text style={[styles.gridDate, uiRTL ? null : { textAlign: 'left' }]}>{formatTime(item.timestamp)}</Text>
+                          {item.category && item.category !== 'auto' && (
+                            <Text style={styles.gridCat}>
+                              {item.category === 'document' ? t.catDoc : item.category === 'menu' ? t.catMenu : t.catBoard}
+                            </Text>
+                          )}
+                        </View>
                       </View>
                     </TouchableOpacity>
                   ))}
@@ -674,12 +680,21 @@ const styles = StyleSheet.create({
     fontFamily: 'Fredoka-Medium',
     textAlign: 'right',
   },
+  gridMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 1,
+  },
   gridDate: {
     color: '#51606F',
     fontSize: 11,
     fontFamily: 'Fredoka-Regular',
-    textAlign: 'right',
-    marginTop: 1,
+  },
+  gridCat: {
+    color: '#2F628C',
+    fontSize: 10,
+    fontFamily: 'Fredoka-Medium',
   },
 
   // Delete day modal

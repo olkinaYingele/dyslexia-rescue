@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { Paragraph } from './claude';
+import { Paragraph, ImageCategory } from './claude';
 import { ParagraphAudio, deleteAudioForCache } from './tts';
 
 const CACHE_KEY = 'recent_screens_v8';
@@ -17,6 +17,7 @@ export interface CachedScreen {
   timestamp: number;
   language: string;
   title: string;
+  category?: ImageCategory;
 }
 
 function extractTitle(paragraphs: Paragraph[]): string {
@@ -79,6 +80,7 @@ export async function saveToCache(
   paragraphs: Paragraph[],
   language: string = 'he',
   audio?: (ParagraphAudio | undefined)[],
+  category?: ImageCategory,
 ): Promise<void> {
   try {
     const newItem: CachedScreen = {
@@ -90,6 +92,7 @@ export async function saveToCache(
       timestamp: Date.now(),
       language,
       title: extractTitle(paragraphs),
+      category,
     };
 
     const existing = await loadCache();
