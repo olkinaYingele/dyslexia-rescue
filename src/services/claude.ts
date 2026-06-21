@@ -169,16 +169,28 @@ SEGMENTATION:
     ],
   });
 
+  const requestId = Date.now();
+  console.log('\n\n\n');
+  console.log('╔══════════════════════════════════════════════╗');
+  console.log(`║  GEMINI REQUEST #${requestId}  ║`);
+  console.log('╚══════════════════════════════════════════════╝');
+  console.log('[Gemini] Sending request...');
+
   // Retry up to 5 times on 503 (server overload), with increasing delays
   let response: Response | null = null;
   try {
     for (let attempt = 1; attempt <= 5; attempt++) {
+      if (attempt > 1) console.log(`[Gemini] Retry attempt ${attempt}/5...`);
       response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal });
+      console.log(`[Gemini] HTTP status: ${response.status}`);
       if (response.ok || response.status !== 503) break;
       if (attempt < 5) await new Promise(r => setTimeout(r, attempt * 3000));
     }
   } catch (e: any) {
-    if (e.name === 'AbortError') throw e;
+    if (e.name === 'AbortError') {
+      console.log('[Gemini] Request aborted by user');
+      throw e;
+    }
     console.warn('[Gemini] Network error:', e);
     throw new Error('NO_INTERNET');
   }
@@ -190,20 +202,39 @@ SEGMENTATION:
   }
 
   const data = await response!.json();
-  const parts = data.candidates?.[0]?.content?.parts || [];
+  const candidate = data.candidates?.[0];
+  console.log('[Gemini] finishReason:', candidate?.finishReason);
+  console.log('[Gemini] safetyRatings:', JSON.stringify(candidate?.safetyRatings));
+  console.log('[Gemini] usageMetadata:', JSON.stringify(data.usageMetadata));
+
+  const parts = candidate?.content?.parts || [];
   const content = parts.find((p: any) => !p.thought)?.text ?? parts[0]?.text;
   if (!content) {
-    console.warn('[Gemini] Empty response:', data);
+    console.warn('[Gemini] EMPTY_RESPONSE — full data:', JSON.stringify(data));
     throw new Error('EMPTY_RESPONSE');
   }
 
+  console.log('[Gemini] Raw content length:', content.length);
+  console.log('[Gemini] Raw content:', content);
+
   const cleanContent = content.replace(/```json|```/g, '').trim();
-  const parsed = JSON.parse(cleanContent);
+  console.log('[Gemini] Clean content length:', cleanContent.length);
+
+  let parsed: any;
+  try {
+    parsed = JSON.parse(cleanContent);
+  } catch (e: any) {
+    console.warn('[Gemini] JSON.parse FAILED:', e.message);
+    console.warn('[Gemini] Failing string (first 500 chars):', cleanContent.slice(0, 500));
+    console.warn('[Gemini] Failing string (last 500 chars):', cleanContent.slice(-500));
+    throw new Error('PARSE_ERROR');
+  }
+
   const boxes = parsed.paragraphs || [];
   const language = parsed.documentLanguage || 'he';
 
-  console.log('=== GEMINI RAW JSON ===');
-  console.log(JSON.stringify(parsed, null, 2));
+  console.log(`[Gemini] Parsed OK — language: ${language}, paragraphs: ${boxes.length}`);
+  console.log('[Gemini] Parsed JSON:', JSON.stringify(parsed, null, 2));
 
   const paragraphs = (boxes as any[])
     .map((item: any) => {
