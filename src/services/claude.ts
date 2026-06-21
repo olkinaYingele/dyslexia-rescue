@@ -117,9 +117,10 @@ RULES FOR CATEGORY C: STRUCTURED TABLES & MENUS (Row-Based Consolidation)
 3. CRITICAL - OMIT ALL LEADER DOTS & ORNAMENTS: Completely ignore and strip out all connecting dots, dashes, or lines (e.g., '.......' or '------'). They are decorative ornaments, NOT text. Replace with "|" as a separator (e.g., "עוף בגריל | 45").
 4. If an item has a small sub-description directly underneath it, include it in the same paragraph object, separating the main line and description with a newline character (\n).
 5. The "boundingBox" for each item MUST span horizontally across the page to fully enclose both the text and the price.
-6. CRITICAL TOKEN OPTIMIZATION (No Segment Splitting): To prevent massive, redundant JSON outputs and ensure ultra-fast processing, NEVER split the "segments" array by words or single symbols for Category C.
-   - The "segments" array for each paragraph in Category C MUST contain exactly ONE segment representing the entire text line, or be left completely empty []. Do not translate or split by languages inside a single row.
-7. Omitting dots and minimizing segments is mandatory to ensure fast API response times (under 5-7 seconds).
+6. ULTRA TOKEN OPTIMIZATION (EMPTY SEGMENTS IS MANDATORY): To prevent JSON truncation and ensure ultra-fast processing under 3-5 seconds, you MUST NOT generate any language segments for Category C.
+   - For every paragraph in Category C, the "segments" array MUST be completely empty: "segments": [].
+   - Never write any objects inside the "segments" array for items in Category C.
+7. Omitting dots and keeping "segments" strictly empty [] is mandatory to ensure complete JSON responses and fast API delivery.
 
 ══════════════════════════════════════════════════════════════════════════
 UNIVERSAL RULES (apply to ALL categories)
