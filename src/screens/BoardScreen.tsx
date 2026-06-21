@@ -711,11 +711,8 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
         const activeColor = COLORS[activeParagraph.index % COLORS.length];
         return (
           <View style={styles.bottomPanel}>
-            <View style={[styles.panelBadge, { backgroundColor: activeColor }]}>
-              <Text style={styles.panelBadgeText}>{activeParagraph.index + 1}</Text>
-            </View>
-
-            <ScrollView style={styles.wordBox} showsVerticalScrollIndicator={false}>
+              <View style={styles.wordBoxWrapper}>
+              <ScrollView style={styles.wordBox} showsVerticalScrollIndicator={false}>
               <Text style={[styles.wordLine, isRTL ? styles.textRTL : styles.textLTR]}>
                 {words.map((word, i) => (
                   <Text key={i}>
@@ -727,6 +724,10 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
                 ))}
               </Text>
             </ScrollView>
+              <View style={[styles.panelBadge, { backgroundColor: activeColor }]}>
+                <Text style={styles.panelBadgeText}>{activeParagraph.index + 1}</Text>
+              </View>
+            </View>
 
             <TouchableOpacity
               style={[styles.playBtn, { backgroundColor: activeColor }]}
@@ -842,26 +843,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'stretch',
   },
+  wordBoxWrapper: {
+    flex: 1,
+    position: 'relative',
+  },
   panelBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignSelf: 'center',
+    position: 'absolute',
+    top: -10,
+    left: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
-    shadowRadius: 4,
+    shadowRadius: 3,
     elevation: 3,
+    zIndex: 10,
   },
   panelBadgeText: {
     color: '#FFF',
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '700',
   },
   wordBox: {
-    flex: 1,
     borderWidth: 1.5,
     borderColor: '#C2C7CF',
     borderRadius: 16,
