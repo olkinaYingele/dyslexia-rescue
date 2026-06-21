@@ -72,7 +72,7 @@ export default function App() {
 
   const handleParagraphsReady = (
     p: Paragraph[], uri: string, lang: string, cacheId?: string, fromArchive: boolean = false,
-    audioData?: (ParagraphAudio | undefined)[]
+    audioData?: (ParagraphAudio | undefined)[], itemCategory?: ImageCategory
   ) => {
     setParagraphs(p);
     setImageUri(uri);
@@ -80,7 +80,7 @@ export default function App() {
     setTimestamp(cacheId ? parseInt(cacheId) : Date.now());
     setCurrentCacheId(cacheId || null);
     setIsFromArchive(fromArchive);
-    setBoardCategory(fromArchive ? 'auto' : category);
+    setBoardCategory(fromArchive ? (itemCategory ?? 'auto') : category);
     setAudio(audioData);
     setScreen('board');
   };

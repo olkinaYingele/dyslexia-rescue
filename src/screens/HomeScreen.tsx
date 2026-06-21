@@ -28,7 +28,7 @@ interface DayGroup {
 const CATEGORY_KEY = 'scan_category_v1';
 
 interface Props {
-  onParagraphsReady: (paragraphs: Paragraph[], imageUri: string, language: string, cacheId?: string, fromArchive?: boolean, audio?: (ParagraphAudio | undefined)[]) => void;
+  onParagraphsReady: (paragraphs: Paragraph[], imageUri: string, language: string, cacheId?: string, fromArchive?: boolean, audio?: (ParagraphAudio | undefined)[], itemCategory?: ImageCategory) => void;
   onAudioReady: (audio: (ParagraphAudio | undefined)[]) => void;
   uiLang: UiLang;
   setUiLang: (lang: UiLang) => void;
@@ -227,7 +227,7 @@ export default function HomeScreen({ onParagraphsReady, onAudioReady, uiLang, se
   };
 
   const openCached = (item: CachedScreen) => {
-    onParagraphsReady(item.paragraphs, item.imageUri, item.language || 'he', item.id, true, item.audio);
+    onParagraphsReady(item.paragraphs, item.imageUri, item.language || 'he', item.id, true, item.audio, item.category);
   };
 
   const confirmDeleteDay = async (group: DayGroup) => {
