@@ -68,7 +68,7 @@ export default function App() {
     setParagraphs(p);
     setImageUri(uri);
     setLanguage(lang);
-    setTimestamp(Date.now());
+    setTimestamp(cacheId ? parseInt(cacheId) : Date.now());
     setCurrentCacheId(cacheId || null);
     setIsFromArchive(fromArchive);
     setAudio(audioData);
