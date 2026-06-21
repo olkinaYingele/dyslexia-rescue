@@ -75,34 +75,31 @@ const RESPONSE_SCHEMA = {
 export async function extractParagraphs(base64: string, signal?: AbortSignal): Promise<{ paragraphs: Paragraph[]; language: string }> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
-  const systemInstruction = `PERFORM A STRICT LITERAL OCR. Identify all text in the image and split it into logical paragraphs.
+  const systemInstruction = `*** HIGH PRIORITY MANDATE: ROW-BY-ROW TABLE READING ***
+Your absolute top priority on structured documents is to detect tables (like the cancellation fees list at the bottom of the page) and READ THEM HORIZONTALLY, ROW-BY-ROW. Group data horizontally across column boundaries. NEVER, under any circumstances, group table data vertically by columns. Splitting rows into separate cells vertically breaks the context and meaning of the document and is a fatal error. Draw ONE bounding box that spans the entire physical width of the row.
+
+PERFORM A STRICT LITERAL OCR on the detected rows.
+Split only into logical paragraphs. A heading + its associated lines = ONE paragraph. A table row = ONE paragraph.
 
 CRITICAL TEXT RULES:
-- Transcribe text WORD FOR WORD, exactly as written. Do NOT paraphrase, summarize, auto-correct, or replace words.
-- NEVER translate text. DO NOT mix meanings or words between different lines or different languages on the page.
-- Treat EVERY word as an isolated visual symbol. Act strictly as a blind mechanical scanner.
+- Transcribe text WORD FOR WORD, exactly as written. Do NOT paraphrase, summarize, or auto-correct typos.
+- NEVER translate text. DO NOT mix meanings or words between different lines or languages on the page.
+- Act strictly as a mechanical scanner.
 - If the image says "דמקה, שש בש, מטקות" — return exactly that. Never invent "משחקי קופסא" or any other generalization.
-- Detect the primary language of the document and return its ISO code (e.g. "he", "en", "ru").
-
-LAYOUT AND SPATIAL RULES (CRITICAL):
-Step 1: Analyze the visual structure of the image before extracting text. Is it a structured document (like a contract with tables) or unstructured (like a whiteboard with scattered notes)?
-Step 2: Apply the correct extraction strategy:
-- IF IT IS A TABLE/GRID (like cancellation fees): You MUST read horizontally, ROW BY ROW. Combine the left column and the right column into ONE single paragraph. Draw ONE bounding box that spans the entire row horizontally. NEVER group data by vertical columns.
-- IF IT IS A WHITEBOARD / UNSTRUCTURED TEXT: Group text by spatial proximity. Treat each distinct visual cluster or isolated note as a separate paragraph with its own tight bounding box. Do not combine clusters that are far apart.
+- Detect the primary document language (ISO 639-1 code).
 
 BOUNDING BOX STRICTNESS & ANTI-GHOSTING:
-- ONLY output bounding boxes for VISIBLE INK. You must tightly wrap the physical characters.
-- DO NOT generate "phantom" boxes in empty margins, footers, or at the bottom of the page. If there is no physical text there, DO NOT output any text or coordinates.
-- Stop bounding exactly where the paragraph's ink ends. NEVER extend a bounding box down into blank, empty space.
-- Every bounding box must correspond exactly 1:1 to real, visible text on the page.
+- ONLY output boxes for VISIBLE INK. Tightly wrap the characters vertically.
+- DO NOT generate "phantom" boxes in empty margins, footers, or at the bottom. Do not extend boxes down into blank space.
+- Every box must correspond 1:1 to real, visible text.
 
 SEGMENTATION RULES:
-- For EACH paragraph, return "segments": split the paragraph text by language ONLY when there are actual foreign WORDS (real words from another language, like "WhatsApp" inside Hebrew text).
-- DO NOT create a separate segment for numbers, times, percentages, prices, or punctuation. These inherit the surrounding language.
-- If the entire paragraph is in one language (with numbers/punctuation inside), return ONE segment covering the full text.
+- For EACH paragraph, return "segments": split by language ONLY when actual foreign WORDS are present (like "WhatsApp" inside Hebrew text).
+- Numbers, times, percentages, prices, punctuation inherit surrounding language. DO NOT create separate segments for them.
+- If the entire paragraph is in one language, return ONE segment covering the full text.
 - The concatenation of all segments' text MUST equal the paragraph text exactly, character by character including whitespace.
 - Use ISO 639-1 codes: 'he' (Hebrew), 'en' (English), 'ru' (Russian), 'de' (German), 'fr' (French), 'es' (Spanish), 'it' (Italian), 'ar' (Arabic), etc.
-- Return bounding box coordinates in 0–1000 scale (0 = top/left edge, 1000 = bottom/right edge).`;
+- Return coordinates in 0–1000 scale (0 = top/left edge, 1000 = bottom/right edge).`;
 
   const body = JSON.stringify({
     systemInstruction: { parts: [{ text: systemInstruction }] },
