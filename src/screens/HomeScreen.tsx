@@ -8,7 +8,7 @@ import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { extractParagraphs, Paragraph } from '../services/claude';
+import { extractParagraphs, Paragraph, ImageCategory } from '../services/claude';
 import { saveToCache, prepareFullImage, prepareThumb, loadCache, deleteFromCache, deleteDayFromCache, getDayKey, CachedScreen } from '../services/cache';
 import { generateAllAudio, ParagraphAudio } from '../services/tts';
 import ProgressLoader from '../components/ProgressLoader';
@@ -74,6 +74,7 @@ export default function HomeScreen({ onParagraphsReady, onAudioReady, uiLang, se
   const [recent, setRecent] = useState<CachedScreen[]>([]);
   const [deleteDayModal, setDeleteDayModal] = useState<DayGroup | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [category, setCategory] = useState<ImageCategory>('auto');
   const abortRef = useRef<AbortController | null>(null);
 
   const showError = (title: string, message: string) => Alert.alert(title, message);
@@ -125,7 +126,7 @@ export default function HomeScreen({ onParagraphsReady, onAudioReady, uiLang, se
       const t1 = Date.now();
       const tsGemini = new Date().toLocaleTimeString('he-IL', { hour12: false });
       console.log(`[${tsGemini}] → Gemini OCR request`);
-      const { paragraphs, language } = await extractParagraphs(manipulated.base64 || '', controller.signal);
+      const { paragraphs, language } = await extractParagraphs(manipulated.base64 || '', controller.signal, category);
       const tsGeminiDone = new Date().toLocaleTimeString('he-IL', { hour12: false });
       console.log(`[${tsGeminiDone}] ← Gemini OCR reply: ${Date.now() - t1}ms (${paragraphs.length} paragraphs)`);
       console.log(`⏱ total to board: ${Date.now() - t0}ms`);
@@ -291,6 +292,24 @@ export default function HomeScreen({ onParagraphsReady, onAudioReady, uiLang, se
           <Feather name="image" size={20} color="#FFFFFF" />
           <Text style={styles.btnText}>{t.gallery}</Text>
         </TouchableOpacity>
+      </View>
+
+      {/* Category selector */}
+      <View style={styles.catRow}>
+        {(['auto', 'document', 'menu', 'whiteboard'] as ImageCategory[]).map(cat => {
+          const label = cat === 'auto' ? t.catAuto : cat === 'document' ? t.catDoc : cat === 'menu' ? t.catMenu : t.catBoard;
+          const active = category === cat;
+          return (
+            <TouchableOpacity
+              key={cat}
+              style={[styles.catBtn, active && styles.catBtnActive]}
+              onPress={() => setCategory(cat)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.catBtnText, active && styles.catBtnTextActive]}>{label}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       {/* Feedback */}
@@ -498,6 +517,34 @@ const styles = StyleSheet.create({
   },
 
   // Feedback
+  catRow: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginBottom: 4,
+    backgroundColor: '#E8EDF5',
+    borderRadius: 12,
+    padding: 3,
+    gap: 2,
+  },
+  catBtn: {
+    flex: 1,
+    paddingVertical: 7,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  catBtnActive: {
+    backgroundColor: '#2F628C',
+  },
+  catBtnText: {
+    fontSize: 13,
+    fontFamily: 'Fredoka-Regular',
+    color: '#72777F',
+  },
+  catBtnTextActive: {
+    color: '#FFFFFF',
+    fontFamily: 'Fredoka-Medium',
+  },
+
   feedbackBtn: {
     flexDirection: 'row',
     alignItems: 'center',

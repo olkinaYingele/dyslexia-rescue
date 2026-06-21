@@ -33,6 +33,10 @@ export const UI = {
     onboardingStep2: 'Tap a paragraph to listen',
     onboardingStep3: 'Follow along with the highlighted word',
     onboardingBtn: 'Got it',
+    catAuto: 'Auto',
+    catDoc: 'Document',
+    catMenu: 'Menu',
+    catBoard: 'Board',
     langToggle: 'עב',
   },
   he: {
@@ -67,6 +71,10 @@ export const UI = {
     onboardingStep2: 'לחץ על פסקה כדי להאזין',
     onboardingStep3: 'עקוב אחר המילה המודגשת',
     onboardingBtn: 'הבנתי',
+    catAuto: 'אוטו',
+    catDoc: 'מסמך',
+    catMenu: 'תפריט',
+    catBoard: 'לוח',
     langToggle: 'EN',
   },
 };

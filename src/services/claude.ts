@@ -72,20 +72,24 @@ const RESPONSE_SCHEMA = {
   required: ['documentLanguage', 'paragraphs'],
 };
 
-export async function extractParagraphs(base64: string, signal?: AbortSignal): Promise<{ paragraphs: Paragraph[]; language: string }> {
+export type ImageCategory = 'auto' | 'document' | 'whiteboard' | 'menu';
+
+export async function extractParagraphs(base64: string, signal?: AbortSignal, category: ImageCategory = 'auto'): Promise<{ paragraphs: Paragraph[]; language: string }> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
-  const systemInstruction = `You are an advanced, context-aware OCR and spatial analysis engine. Your task is to analyze the image, automatically determine its environment, and extract text strictly into the required JSON structure.
-
-CRITICAL STEP 0 — PRE-CLASSIFICATION (Internal Logic):
+  const classificationBlock = category === 'auto'
+    ? `CRITICAL STEP 0 — PRE-CLASSIFICATION (Internal Logic):
 Before performing OCR or calculating boundaries, visually evaluate the image:
 - CATEGORY A (printed_document): If the image is a scanned page, book, formal contract, printed form, or typed text in standard linear paragraphs/columns. MUST be printed/typed, NOT handwritten.
 - CATEGORY B (whiteboard): If the image contains ANY handwritten text, whiteboard notes, chalkboard notes, notebook pages, hand-drawn mind maps, or lists written by hand (even if they look like tables, schedules, or have column structures). ANY handwritten content MUST go here.
 - CATEGORY C (menu_table): If the image is a printed/typed restaurant menu, printed price list, printed product catalog, or any typed structured table with columnar data. MUST be printed/typed, NOT handwritten.
 
-Based on this classification, apply ONLY the corresponding ruleset below:
+Based on this classification, apply ONLY the corresponding ruleset below:`
+    : `The user has already classified this image. Skip classification and apply ONLY the ruleset for ${
+        category === 'document' ? 'CATEGORY A' : category === 'whiteboard' ? 'CATEGORY B' : 'CATEGORY C'
+      } below:`;
 
-══════════════════════════════════════════════════════════════════════════
+  const rulesA = `══════════════════════════════════════════════════════════════════════════
 RULES FOR CATEGORY A: PRINTED DOCUMENT (Paragraph Aggregation Mode)
 ══════════════════════════════════════════════════════════════════════════
 *** TOP PRIORITY: TABLE/GRID READING ***
@@ -93,11 +97,11 @@ If the document contains tables or grids (cancellation fees, timetables, etc.): 
 
 1. Group text strictly into FULL LOGICAL PARAGRAPHS. Do NOT separate adjacent lines if they belong to the same block, heading, or body paragraph.
 2. A multi-line paragraph block must produce exactly ONE object in the "paragraphs" array.
-3. The "text" field must contain all lines belonging to that paragraph, separated by \n.
+3. The "text" field must contain all lines belonging to that paragraph, separated by \\n.
 4. The "boundingBox" must tightly encompass the ENTIRE multi-line paragraph block as a single large rectangle. Do not output boxes for individual lines.
-5. Handle RTL (Hebrew) and LTR (English) alignment correctly according to standard document flow.
+5. Handle RTL (Hebrew) and LTR (English) alignment correctly according to standard document flow.`;
 
-══════════════════════════════════════════════════════════════════════════
+  const rulesB = `══════════════════════════════════════════════════════════════════════════
 RULES FOR CATEGORY B: WHITEBOARD & SCHEMATICS (Spatial Clustering Mode)
 ══════════════════════════════════════════════════════════════════════════
 1. IGNORE standard linear page layout. Instead, identify isolated spatial clusters, standalone nodes, or floating handwritten text "clouds".
@@ -107,20 +111,31 @@ RULES FOR CATEGORY B: WHITEBOARD & SCHEMATICS (Spatial Clustering Mode)
    - A date and its corresponding handwritten text description written horizontally inline MUST be bound together into the exact same paragraph object. NEVER isolate a date into its own tiny standalone bounding box, and NEVER leave the text description detached from its date.
    - The bounding box for a scheduled item MUST span horizontally to fully enclose both the date and the entire text line next to it.
    - Ensure the extracted "text" combines the date and the text in logically correct, human-readable reading order (e.g., "4.5 מבדק באנגלית (שני)").
-4. Ensure "boundingBox" parameters tightly wrap ONLY that specific local cluster, node, or single scheduled row. Prevent massive overlapping bounding boxes.
+4. Ensure "boundingBox" parameters tightly wrap ONLY that specific local cluster, node, or single scheduled row. Prevent massive overlapping bounding boxes.`;
 
-══════════════════════════════════════════════════════════════════════════
+  const rulesC = `══════════════════════════════════════════════════════════════════════════
 RULES FOR CATEGORY C: STRUCTURED TABLES & MENUS (Row-Based Consolidation)
 ══════════════════════════════════════════════════════════════════════════
 1. DO NOT split a menu item/table row into multiple separate paragraph objects.
 2. Group the ENTIRE line—including Item Name and its Price/Value—into exactly ONE single paragraph object.
 3. CRITICAL - OMIT ALL LEADER DOTS & ORNAMENTS: Completely ignore and strip out all connecting dots, dashes, or lines (e.g., '.......' or '------'). They are decorative ornaments, NOT text. Replace with "|" as a separator (e.g., "עוף בגריל | 45").
-4. If an item has a small sub-description directly underneath it, include it in the same paragraph object, separating the main line and description with a newline character (\n).
+4. If an item has a small sub-description directly underneath it, include it in the same paragraph object, separating the main line and description with a newline character (\\n).
 5. The "boundingBox" for each item MUST span horizontally across the page to fully enclose both the text and the price.
 6. ULTRA TOKEN OPTIMIZATION (EMPTY SEGMENTS IS MANDATORY): To prevent JSON truncation and ensure ultra-fast processing under 3-5 seconds, you MUST NOT generate any language segments for Category C.
    - For every paragraph in Category C, the "segments" array MUST be completely empty: "segments": [].
    - Never write any objects inside the "segments" array for items in Category C.
-7. Omitting dots and keeping "segments" strictly empty [] is mandatory to ensure complete JSON responses and fast API delivery.
+7. Omitting dots and keeping "segments" strictly empty [] is mandatory to ensure complete JSON responses and fast API delivery.`;
+
+  const activeRules = category === 'document' ? rulesA
+    : category === 'whiteboard' ? rulesB
+    : category === 'menu' ? rulesC
+    : `${rulesA}\n\n${rulesB}\n\n${rulesC}`;
+
+  const systemInstruction = `You are an advanced, context-aware OCR and spatial analysis engine. Your task is to analyze the image and extract text strictly into the required JSON structure.
+
+${classificationBlock}
+
+${activeRules}
 
 ══════════════════════════════════════════════════════════════════════════
 UNIVERSAL RULES (apply to ALL categories)
@@ -150,7 +165,10 @@ SEGMENTATION:
       {
         parts: [
           { inline_data: { mime_type: 'image/jpeg', data: base64 } },
-          { text: 'Classify image (Category A: printed document, Category B: whiteboard/handwritten, Category C: menu/price list/table), then apply the matching ruleset. Transcribe every word exactly. Return bounding boxes as ymin/xmin/ymax/xmax in 0–1000 scale.' },
+          { text: category === 'auto'
+              ? 'Classify image (Category A: printed document, Category B: whiteboard/handwritten, Category C: menu/price list/table), then apply the matching ruleset. Transcribe every word exactly. Return bounding boxes as ymin/xmin/ymax/xmax in 0–1000 scale.'
+              : `This is a ${category === 'document' ? 'Category A printed document' : category === 'whiteboard' ? 'Category B whiteboard/handwritten image' : 'Category C menu or table'}. Apply the ruleset for this category. Transcribe every word exactly. Return bounding boxes as ymin/xmin/ymax/xmax in 0–1000 scale.`
+          },
         ],
       },
     ],
