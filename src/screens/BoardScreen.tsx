@@ -254,18 +254,18 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
   // supported by the native animated module. Use addListener instead.
   const normalBorderAnim = useRef(new Animated.Value(2)).current;
   const activeBorderAnim = useRef(new Animated.Value(3.5)).current;
-  const badgeSizeAnim    = useRef(new Animated.Value(26)).current;
-  const badgeRadiusAnim  = useRef(new Animated.Value(13)).current;
-  const badgeFontAnim    = useRef(new Animated.Value(13)).current;
+  const badgeSizeAnim    = useRef(new Animated.Value(14)).current;
+  const badgeRadiusAnim  = useRef(new Animated.Value(7)).current;
+  const badgeFontAnim    = useRef(new Animated.Value(7)).current;
 
   useEffect(() => {
     const listenerId = scaleAnim.addListener(({ value }) => {
       const s = value || 1;
       normalBorderAnim.setValue(2 / s);
       activeBorderAnim.setValue(3.5 / s);
-      badgeSizeAnim.setValue(26 / s);
-      badgeRadiusAnim.setValue(13 / s);
-      badgeFontAnim.setValue(13 / s);
+      badgeSizeAnim.setValue(14 / s);
+      badgeRadiusAnim.setValue(7 / s);
+      badgeFontAnim.setValue(7 / s);
     });
     return () => scaleAnim.removeListener(listenerId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -690,8 +690,8 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
             const isActive = activeParagraph?.id === p.id;
             const left = rendered.oX + p.box.x * rendered.rW;
             const top = rendered.oY + p.box.y * rendered.rH;
-            const width = Math.max(p.box.width * rendered.rW, 80);
-            const height = Math.max(p.box.height * rendered.rH, 44);
+            const width = Math.max(p.box.width * rendered.rW, 40);
+            const height = Math.max(p.box.height * rendered.rH, 22);
 
             return (
               <TouchableOpacity
@@ -852,19 +852,19 @@ const styles = StyleSheet.create({
   },
   badge: {
     position: 'absolute',
-    top: 4,
-    right: 4,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    top: 2,
+    right: 2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
-    shadowRadius: 3,
+    shadowRadius: 2,
   },
-  badgeText: { color: '#FFF', fontSize: 12, fontWeight: '700' },
+  badgeText: { color: '#FFF', fontSize: 7, fontWeight: '700' },
 
   bottomPanel: {
     backgroundColor: '#F7F9FF',
