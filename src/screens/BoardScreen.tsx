@@ -33,7 +33,7 @@ interface Props {
   audio?: (ParagraphAudio | undefined)[];  // Android: pre-generated TTS audio (undefined = generation failed for this paragraph, will fallback to expo-speech)
 }
 
-const COLORS = ['#2F628C', '#51606F', '#68587A', '#0F4A73', '#3A4857', '#504061', '#245882', '#42474E'];
+const COLORS = ['#E05A46', '#E07D3C', '#E8A828', '#3DAB5A', '#30B898', '#2E90CC', '#7848A8', '#E84878'];
 
 function parseWords(text: string): { words: string[]; lineBreaks: Set<number> } {
   const lines = text.split('\n');
@@ -760,7 +760,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#2F628C',
+    backgroundColor: '#2E90CC',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
@@ -844,10 +844,10 @@ const styles = StyleSheet.create({
   },
   activeWord: Platform.OS === 'ios' ? {
     // iOS: фон работает корректно
-    backgroundColor: '#EFDBFF',
+    backgroundColor: '#FFF0C0',
     borderRadius: 4,
     fontWeight: '700',
-    color: '#504061',
+    color: '#8C5A00',
   } : {
     // Android: на RTL фон "растекается" по всей строке —
     // компенсируем явным жирным фонтом + ярким цветом + подчёркиванием
@@ -912,7 +912,7 @@ const styles = StyleSheet.create({
     color: '#42474E',
   },
   modalBtnDelete: {
-    backgroundColor: '#2F628C',
+    backgroundColor: '#2E90CC',
   },
   modalBtnDeleteText: {
     fontSize: 16,
@@ -924,7 +924,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: '#2F628C',
+    backgroundColor: '#2E90CC',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
