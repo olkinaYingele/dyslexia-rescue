@@ -81,6 +81,14 @@ Your absolute top priority on structured documents is to detect tables (like the
 PERFORM A STRICT LITERAL OCR on the detected rows.
 Split only into logical paragraphs. A heading + its associated lines = ONE paragraph. A table row = ONE paragraph.
 
+CRITICAL LOGICAL GROUPING RULES:
+1. Group text into full, logical paragraphs or visual blocks. Do NOT separate adjacent lines if they belong to the same paragraph, list item, or heading block.
+2. For each logical block, create exactly ONE object in the "paragraphs" array.
+3. The "text" field MUST contain all the lines of that block, separated by a newline character (\n).
+4. The "boundingBox" MUST encompass the ENTIRE block as a single large rectangle wrapping all its lines together. Do not calculate bounding boxes for individual lines.
+5. Visual headers, titles with sub-headers, or bullet points that belong together spatially and contextually MUST be merged into a single bounding box with multiple lines in the "text" field.
+6. Only separate blocks if there is a significant visual gap, a change in column layout, or a completely different topic/section on the page.
+
 CRITICAL TEXT RULES:
 - Transcribe text WORD FOR WORD, exactly as written. Do NOT paraphrase, summarize, or auto-correct typos.
 - NEVER translate text. DO NOT mix meanings or words between different lines or languages on the page.
