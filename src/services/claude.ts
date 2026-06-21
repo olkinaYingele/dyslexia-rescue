@@ -79,31 +79,34 @@ export async function extractParagraphs(base64: string, signal?: AbortSignal): P
 
 CRITICAL STEP 0 — PRE-CLASSIFICATION (Internal Logic):
 Before performing OCR or calculating boundaries, visually evaluate the image:
-- CATEGORY A (printed_document): Scanned page, formal contract, printed form, receipt, schedule, or typed text in standard linear paragraphs/columns.
-- CATEGORY B (whiteboard): Physical or digital whiteboard, notebook page, hand-drawn mind map, schematic with arrows, diagrams, or scattered handwritten notes.
+- CATEGORY A (printed_document): If the image is a scanned page, book, formal contract, printed form, or typed text in standard linear paragraphs/columns.
+- CATEGORY B (whiteboard): If the image is a physical/digital whiteboard, notebook page, hand-drawn mind map, schematic with arrows, diagrams, or scattered handwritten notes.
 
 Based on this classification, apply ONLY the corresponding ruleset below:
 
 ══════════════════════════════════════════════════════════════════════════
 RULES FOR CATEGORY A: PRINTED DOCUMENT (Paragraph Aggregation Mode)
 ══════════════════════════════════════════════════════════════════════════
-*** TOP PRIORITY: TABLE READING ***
-If the document contains tables or grids (e.g. cancellation fees, schedules): read HORIZONTALLY, ROW-BY-ROW. Combine all columns of a row into ONE paragraph. Draw ONE bounding box spanning the full row width. NEVER group table data vertically by columns — this is a fatal error.
+*** TOP PRIORITY: TABLE/GRID READING ***
+If the document contains tables or grids (cancellation fees, timetables, etc.): read HORIZONTALLY, ROW-BY-ROW. Combine all columns of a row into ONE paragraph. Draw ONE bounding box spanning the full row width. NEVER group table data vertically by columns — this is a fatal error.
 
-1. Group text into FULL LOGICAL PARAGRAPHS. Do NOT separate adjacent lines belonging to the same block, heading, or body paragraph.
-2. Each logical block produces exactly ONE object in the "paragraphs" array.
-3. The "text" field must contain all lines of that block, separated by \n.
-4. The "boundingBox" must tightly encompass the ENTIRE multi-line block as one rectangle. Do not output boxes for individual lines.
-5. Headers, titles with sub-headers, bullet points that are spatially and contextually linked MUST be merged into one bounding box.
-6. Only separate blocks on significant visual gaps, column layout changes, or completely different sections.
+1. Group text strictly into FULL LOGICAL PARAGRAPHS. Do NOT separate adjacent lines if they belong to the same block, heading, or body paragraph.
+2. A multi-line paragraph block must produce exactly ONE object in the "paragraphs" array.
+3. The "text" field must contain all lines belonging to that paragraph, separated by \n.
+4. The "boundingBox" must tightly encompass the ENTIRE multi-line paragraph block as a single large rectangle. Do not output boxes for individual lines.
+5. Handle RTL (Hebrew) and LTR (English) alignment correctly according to standard document flow.
 
 ══════════════════════════════════════════════════════════════════════════
 RULES FOR CATEGORY B: WHITEBOARD & SCHEMATICS (Spatial Clustering Mode)
 ══════════════════════════════════════════════════════════════════════════
-1. IGNORE standard linear page layout. Identify isolated spatial clusters, standalone nodes, or floating handwritten text.
-2. Treat standalone words, circled terms, map nodes, or short labels near lines/arrows as independent paragraph objects. Do NOT merge them with unrelated neighbors.
-3. If multiple handwritten lines clearly form a local list, truth table, or unified block, group that block using \n in the "text" field.
-4. Bounding boxes must tightly wrap ONLY that specific cluster. Prevent massive overlapping boxes.
+1. IGNORE standard linear page layout. Instead, identify isolated spatial clusters, standalone nodes, or floating handwritten text "clouds".
+2. Treat standalone words, circled terms, map nodes, or short labels near lines/arrows as independent, separate paragraph objects. Do NOT merge them with unrelated neighboring text blocks.
+3. CRITICAL FOR DATED LISTS, SCHEDULES & TIMELINES:
+   - Each distinct date (e.g., "30.4", "4.5", "5.5", "7.5") or distinct bullet point marks the start of a NEW, separate paragraph object. NEVER group multiple rows with different dates into a single large paragraph block.
+   - A date and its corresponding handwritten text description written horizontally inline MUST be bound together into the exact same paragraph object. NEVER isolate a date into its own tiny standalone bounding box, and NEVER leave the text description detached from its date.
+   - The bounding box for a scheduled item MUST span horizontally to fully enclose both the date and the entire text line next to it.
+   - Ensure the extracted "text" combines the date and the text in logically correct, human-readable reading order (e.g., "4.5 מבדק באנגלית (שני)").
+4. Ensure "boundingBox" parameters tightly wrap ONLY that specific local cluster, node, or single scheduled row. Prevent massive overlapping bounding boxes.
 
 ══════════════════════════════════════════════════════════════════════════
 UNIVERSAL RULES (apply to BOTH categories)
@@ -125,7 +128,7 @@ SEGMENTATION:
 - If the entire paragraph is in one language, return ONE segment with the full text.
 - The concatenation of all segments' text MUST equal the paragraph text exactly, character by character including whitespace.
 - Use ISO 639-1 codes: 'he', 'en', 'ru', 'de', 'fr', 'es', 'it', 'ar'.
-- "documentLanguage" must be the dominant ISO 639-1 code (never "mixed").`;
+- "documentLanguage" must be the dominant ISO 639-1 code (e.g. "he", "en", "ru").`;
 
   const body = JSON.stringify({
     systemInstruction: { parts: [{ text: systemInstruction }] },
