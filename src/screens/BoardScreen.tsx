@@ -248,16 +248,28 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
   const isPinching = useRef(false);
   const boxTappedRef = useRef(false);
 
-  // Animated values for zoom-compensated border and badge
-  const _av2   = useRef(new Animated.Value(2)).current;
-  const _av35  = useRef(new Animated.Value(3.5)).current;
-  const _av26  = useRef(new Animated.Value(26)).current;
-  const _av13  = useRef(new Animated.Value(13)).current;
-  const normalBorderAnim  = useRef(Animated.divide(_av2,  scaleAnim)).current;
-  const activeBorderAnim  = useRef(Animated.divide(_av35, scaleAnim)).current;
-  const badgeSizeAnim     = useRef(Animated.divide(_av26, scaleAnim)).current;
-  const badgeRadiusAnim   = useRef(Animated.divide(_av13, scaleAnim)).current;
-  const badgeFontAnim     = useRef(Animated.divide(_av13, scaleAnim)).current;
+  // JS-driver animated values for zoom-compensated border and badge.
+  // Cannot use Animated.divide(x, scaleAnim) here because scaleAnim uses
+  // useNativeDriver:true, and borderWidth/width/height/fontSize are not
+  // supported by the native animated module. Use addListener instead.
+  const normalBorderAnim = useRef(new Animated.Value(2)).current;
+  const activeBorderAnim = useRef(new Animated.Value(3.5)).current;
+  const badgeSizeAnim    = useRef(new Animated.Value(26)).current;
+  const badgeRadiusAnim  = useRef(new Animated.Value(13)).current;
+  const badgeFontAnim    = useRef(new Animated.Value(13)).current;
+
+  useEffect(() => {
+    const listenerId = scaleAnim.addListener(({ value }) => {
+      const s = value || 1;
+      normalBorderAnim.setValue(2 / s);
+      activeBorderAnim.setValue(3.5 / s);
+      badgeSizeAnim.setValue(26 / s);
+      badgeRadiusAnim.setValue(13 / s);
+      badgeFontAnim.setValue(13 / s);
+    });
+    return () => scaleAnim.removeListener(listenerId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     // Конфигурируем аудио: не играть в фоне (по умолчанию iOS может продолжать)
