@@ -377,9 +377,9 @@ export default function HomeScreen({ onParagraphsReady, onAudioReady, uiLang, se
                         ) : null}
                         <View style={styles.gridMeta}>
                           <Text style={[styles.gridDate, uiRTL ? null : { textAlign: 'left' }]}>{formatTime(item.timestamp)}</Text>
-                          {item.category && item.category !== 'auto' && (
+                          {item.category && (
                             <Text style={styles.gridCat}>
-                              {item.category === 'document' ? t.catDoc : item.category === 'menu' ? t.catMenu : t.catBoard}
+                              {item.category === 'document' ? t.catDoc : item.category === 'menu' ? t.catMenu : item.category === 'whiteboard' ? t.catBoard : t.catAuto}
                             </Text>
                           )}
                         </View>

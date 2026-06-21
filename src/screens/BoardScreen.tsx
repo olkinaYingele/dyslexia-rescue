@@ -659,10 +659,10 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
 
         <View style={styles.headerCenter}>
           <Text style={styles.dateText} numberOfLines={1}>{formatTimestamp(timestamp, uiLang)}</Text>
-          {category && category !== 'auto' && (
+          {category && (
             <View style={styles.catChip}>
               <Text style={styles.catChipText}>
-                {category === 'document' ? t.catDoc : category === 'menu' ? t.catMenu : t.catBoard}
+                {category === 'document' ? t.catDoc : category === 'menu' ? t.catMenu : category === 'whiteboard' ? t.catBoard : t.catAuto}
               </Text>
             </View>
           )}
