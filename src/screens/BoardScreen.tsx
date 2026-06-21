@@ -727,18 +727,17 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
               <View style={[styles.panelBadge, { backgroundColor: activeColor }]}>
                 <Text style={styles.panelBadgeText}>{activeParagraph.index + 1}</Text>
               </View>
+              <TouchableOpacity
+                style={[styles.panelPlayBtn, { backgroundColor: activeColor }]}
+                onPress={() => {
+                  if (isPlaying) pauseReading();
+                  else if (isPaused) resumeReading();
+                  else startReading(activeParagraph);
+                }}
+              >
+                <Feather name={isPlaying ? 'pause' : 'play'} size={18} color="#FFFFFF" />
+              </TouchableOpacity>
             </View>
-
-            <TouchableOpacity
-              style={[styles.playBtn, { backgroundColor: activeColor }]}
-              onPress={() => {
-                if (isPlaying) pauseReading();
-                else if (isPaused) resumeReading();
-                else startReading(activeParagraph);
-              }}
-            >
-              <Feather name={isPlaying ? 'pause' : 'play'} size={22} color="#FFFFFF" />
-            </TouchableOpacity>
           </View>
         );
       })()}
@@ -867,6 +866,22 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 13,
     fontWeight: '700',
+  },
+  panelPlayBtn: {
+    position: 'absolute',
+    top: -10,
+    right: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 3,
+    zIndex: 10,
   },
   wordBox: {
     borderWidth: 1.5,
