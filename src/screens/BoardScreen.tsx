@@ -248,6 +248,14 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
   const isPinching = useRef(false);
   const boxTappedRef = useRef(false);
 
+  // Animated values for zoom-compensated border and badge
+  const _av1   = useRef(new Animated.Value(1)).current;
+  const _av2   = useRef(new Animated.Value(2)).current;
+  const _av35  = useRef(new Animated.Value(3.5)).current;
+  const inverseScaleAnim  = useRef(Animated.divide(_av1,  scaleAnim)).current;
+  const normalBorderAnim  = useRef(Animated.divide(_av2,  scaleAnim)).current;
+  const activeBorderAnim  = useRef(Animated.divide(_av35, scaleAnim)).current;
+
   useEffect(() => {
     // Конфигурируем аудио: не играть в фоне (по умолчанию iOS может продолжать)
     Audio.setAudioModeAsync({
@@ -673,11 +681,7 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
             return (
               <TouchableOpacity
                 key={p.id}
-                style={[
-                  styles.box,
-                  { left, top, width, height, borderColor: color },
-                  isActive && { backgroundColor: `${color}55`, borderWidth: 3.5 },
-                ]}
+                style={[styles.box, { left, top, width, height }]}
                 onPressIn={() => { boxTappedRef.current = true; }}
                 onPress={() => {
                   if (isActive) {
@@ -689,9 +693,29 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
                 }}
                 activeOpacity={0.6}
               >
-                <View style={[styles.badge, { backgroundColor: color }]}>
+                {/* Border layer — thickness stays constant regardless of zoom */}
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    StyleSheet.absoluteFill,
+                    {
+                      borderColor: color,
+                      borderRadius: 10,
+                      borderWidth: isActive ? activeBorderAnim : normalBorderAnim,
+                      backgroundColor: isActive ? `${color}55` : 'transparent',
+                    },
+                  ]}
+                />
+                {/* Badge — counter-scaled so it stays the same visual size */}
+                <Animated.View
+                  style={[
+                    styles.badge,
+                    { backgroundColor: color },
+                    { transform: [{ scale: inverseScaleAnim }] },
+                  ]}
+                >
                   <Text style={styles.badgeText}>{isActive && isPlaying ? '⏸' : i + 1}</Text>
-                </View>
+                </Animated.View>
               </TouchableOpacity>
             );
           })}
@@ -804,9 +828,6 @@ const styles = StyleSheet.create({
   image: { width: '100%', height: '100%' },
   box: {
     position: 'absolute',
-    borderWidth: 2,
-    borderRadius: 10,
-    backgroundColor: 'transparent',
   },
   badge: {
     position: 'absolute',
