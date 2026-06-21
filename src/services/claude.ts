@@ -156,7 +156,7 @@ SEGMENTATION:
     ],
     generationConfig: {
       temperature: 0.0,
-      maxOutputTokens: 4096,
+      maxOutputTokens: 8192,
       responseMimeType: 'application/json',
       responseSchema: RESPONSE_SCHEMA,
       thinkingConfig: { thinkingBudget: 0 },
@@ -227,7 +227,21 @@ SEGMENTATION:
     console.warn('[Gemini] JSON.parse FAILED:', e.message);
     console.warn('[Gemini] Failing string (first 500 chars):', cleanContent.slice(0, 500));
     console.warn('[Gemini] Failing string (last 500 chars):', cleanContent.slice(-500));
-    throw new Error('PARSE_ERROR');
+
+    // Attempt to repair truncated JSON: find the last complete paragraph object
+    // and close the structure. Gemini truncates mid-string when hitting token limit.
+    try {
+      // Each complete paragraph ends with its segments array closing: ]<newline>    }
+      const closeMarker = ']\n    }';
+      const lastClose = cleanContent.lastIndexOf(closeMarker);
+      if (lastClose === -1) throw new Error('no repair marker');
+      const repaired = cleanContent.slice(0, lastClose + closeMarker.length) + '\n  ]\n}';
+      parsed = JSON.parse(repaired);
+      console.warn(`[Gemini] JSON repaired — kept ${parsed.paragraphs?.length ?? 0} paragraphs`);
+    } catch (repairErr: any) {
+      console.warn('[Gemini] Repair also failed:', repairErr.message);
+      throw new Error('PARSE_ERROR');
+    }
   }
 
   const boxes = parsed.paragraphs || [];
