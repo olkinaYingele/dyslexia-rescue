@@ -1,14 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { PaperProvider, MD3LightTheme } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import HomeScreen from './src/screens/HomeScreen';
 import BoardScreen from './src/screens/BoardScreen';
-import { Paragraph } from './src/services/claude';
+import { Paragraph, ImageCategory } from './src/services/claude';
 import { deleteFromCache } from './src/services/cache';
 import { ParagraphAudio } from './src/services/tts';
 import { UiLang } from './src/i18n';
+
+const CATEGORY_KEY = 'scan_category_v1';
 
 type Screen = 'home' | 'board';
 
@@ -53,6 +56,12 @@ export default function App() {
   const [isFromArchive, setIsFromArchive] = useState(false);
   const [audio, setAudio] = useState<(ParagraphAudio | undefined)[] | undefined>(undefined);
   const [uiLang, setUiLang] = useState<UiLang>('en');
+  const [category, setCategory] = useState<ImageCategory>('auto');
+  const [boardCategory, setBoardCategory] = useState<ImageCategory>('auto');
+
+  useEffect(() => {
+    AsyncStorage.getItem(CATEGORY_KEY).then(v => { if (v) setCategory(v as ImageCategory); });
+  }, []);
 
   const [fontsLoaded] = useFonts({
     'Fredoka-Regular':  require('./assets/fonts/Fredoka-Regular.ttf'),
@@ -71,6 +80,7 @@ export default function App() {
     setTimestamp(cacheId ? parseInt(cacheId) : Date.now());
     setCurrentCacheId(cacheId || null);
     setIsFromArchive(fromArchive);
+    setBoardCategory(fromArchive ? 'auto' : category);
     setAudio(audioData);
     setScreen('board');
   };
@@ -97,7 +107,7 @@ export default function App() {
       <PaperProvider theme={theme}>
         <StatusBar style="dark" />
         {screen === 'home' && (
-          <HomeScreen onParagraphsReady={handleParagraphsReady} onAudioReady={handleAudioReady} uiLang={uiLang} setUiLang={setUiLang} />
+          <HomeScreen onParagraphsReady={handleParagraphsReady} onAudioReady={handleAudioReady} uiLang={uiLang} setUiLang={setUiLang} category={category} setCategory={setCategory} />
         )}
         {screen === 'board' && (
           <BoardScreen
@@ -106,6 +116,7 @@ export default function App() {
             language={language}
             isCached={isFromArchive}
             timestamp={timestamp}
+            category={boardCategory}
             onExit={handleExit}
             onDelete={handleDelete}
             uiLang={uiLang}

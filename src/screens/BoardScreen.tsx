@@ -17,7 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Speech from 'expo-speech';
 import { Audio } from 'expo-av';
 import { Feather } from '@expo/vector-icons';
-import { Paragraph } from '../services/claude';
+import { Paragraph, ImageCategory } from '../services/claude';
 import { ParagraphAudio } from '../services/tts';
 import { UiLang, UI } from '../i18n';
 
@@ -27,10 +27,11 @@ interface Props {
   language: string;
   isCached: boolean;
   timestamp?: number;
+  category?: ImageCategory;
   onExit: () => void;
   onDelete: () => void;
   uiLang: UiLang;
-  audio?: (ParagraphAudio | undefined)[];  // Android: pre-generated TTS audio (undefined = generation failed for this paragraph, will fallback to expo-speech)
+  audio?: (ParagraphAudio | undefined)[];
 }
 
 const COLORS = ['#E05A46', '#E07D3C', '#E8A828', '#3DAB5A', '#30B898', '#2F628C', '#7848A8', '#E84878'];
@@ -210,7 +211,7 @@ function getDistance(touches: any[]): number {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
-export default function BoardScreen({ imageUri, paragraphs, language, isCached, timestamp, onExit, onDelete, uiLang, audio }: Props) {
+export default function BoardScreen({ imageUri, paragraphs, language, isCached, timestamp, category, onExit, onDelete, uiLang, audio }: Props) {
   const t = UI[uiLang];
   const uiRTL = uiLang === 'he';
   const soundRef = useRef<Audio.Sound | null>(null);
@@ -656,7 +657,16 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
           </TouchableOpacity>
         )}
 
-        <Text style={styles.dateText} numberOfLines={1}>{formatTimestamp(timestamp, uiLang)}</Text>
+        <View style={styles.headerCenter}>
+          <Text style={styles.dateText} numberOfLines={1}>{formatTimestamp(timestamp, uiLang)}</Text>
+          {category && category !== 'auto' && (
+            <View style={styles.catChip}>
+              <Text style={styles.catChipText}>
+                {category === 'document' ? t.catDoc : category === 'menu' ? t.catMenu : t.catBoard}
+              </Text>
+            </View>
+          )}
+        </View>
 
         <TouchableOpacity style={styles.headerBtn} onPress={() => setShowDeleteModal(true)}>
           <Feather name="trash-2" size={20} color="#72777F" />
@@ -831,13 +841,28 @@ const styles = StyleSheet.create({
     fontFamily: 'Fredoka-Medium',
     color: '#FFFFFF',
   },
-  dateText: {
+  headerCenter: {
     flex: 1,
+    alignItems: 'center',
+    marginHorizontal: 8,
+    gap: 3,
+  },
+  dateText: {
     fontSize: 12,
     fontFamily: 'Fredoka-Regular',
     color: '#72777F',
     textAlign: 'center',
-    marginHorizontal: 8,
+  },
+  catChip: {
+    backgroundColor: '#2F628C22',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  catChipText: {
+    fontSize: 11,
+    fontFamily: 'Fredoka-Medium',
+    color: '#2F628C',
   },
 
   imageWrapper: {

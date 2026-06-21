@@ -25,11 +25,15 @@ interface DayGroup {
   items: CachedScreen[];
 }
 
+const CATEGORY_KEY = 'scan_category_v1';
+
 interface Props {
   onParagraphsReady: (paragraphs: Paragraph[], imageUri: string, language: string, cacheId?: string, fromArchive?: boolean, audio?: (ParagraphAudio | undefined)[]) => void;
   onAudioReady: (audio: (ParagraphAudio | undefined)[]) => void;
   uiLang: UiLang;
   setUiLang: (lang: UiLang) => void;
+  category: ImageCategory;
+  setCategory: (c: ImageCategory) => void;
 }
 
 function getDayLabel(dateKey: string, uiLang: UiLang): string {
@@ -65,7 +69,7 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
   return chunks;
 }
 
-export default function HomeScreen({ onParagraphsReady, onAudioReady, uiLang, setUiLang }: Props) {
+export default function HomeScreen({ onParagraphsReady, onAudioReady, uiLang, setUiLang, category, setCategory }: Props) {
   const t = UI[uiLang];
   const uiRTL = uiLang === 'he';
   const [loading, setLoading] = useState(false);
@@ -74,8 +78,12 @@ export default function HomeScreen({ onParagraphsReady, onAudioReady, uiLang, se
   const [recent, setRecent] = useState<CachedScreen[]>([]);
   const [deleteDayModal, setDeleteDayModal] = useState<DayGroup | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [category, setCategory] = useState<ImageCategory>('auto');
   const abortRef = useRef<AbortController | null>(null);
+
+  const handleSetCategory = (c: ImageCategory) => {
+    setCategory(c);
+    AsyncStorage.setItem(CATEGORY_KEY, c);
+  };
 
   const showError = (title: string, message: string) => Alert.alert(title, message);
 
@@ -303,7 +311,7 @@ export default function HomeScreen({ onParagraphsReady, onAudioReady, uiLang, se
             <TouchableOpacity
               key={cat}
               style={[styles.catBtn, active && styles.catBtnActive]}
-              onPress={() => setCategory(cat)}
+              onPress={() => handleSetCategory(cat)}
               activeOpacity={0.7}
             >
               <Text style={[styles.catBtnText, active && styles.catBtnTextActive]}>{label}</Text>
