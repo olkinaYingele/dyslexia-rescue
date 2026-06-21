@@ -81,7 +81,7 @@ CRITICAL STEP 0 — PRE-CLASSIFICATION (Internal Logic):
 Before performing OCR or calculating boundaries, visually evaluate the image:
 - CATEGORY A (printed_document): If the image is a scanned page, book, formal contract, printed form, or typed text in standard linear paragraphs/columns.
 - CATEGORY B (whiteboard): If the image is a physical/digital whiteboard, notebook page, hand-drawn mind map, schematic with arrows, diagrams, or scattered handwritten notes.
-- CATEGORY C (menu_table): If the image is a restaurant menu, price list, product catalog, or any structured table where rows contain: name + optional description + price (or similar columnar data per row).
+- CATEGORY C (menu_table): If the image is a restaurant menu, price list, product catalog, or any structured table where rows contain: name + optional description + price (or similar columnar data per row). NOT a whiteboard, NOT a handwritten schedule, NOT a dated list — even if it has columns.
 
 Based on this classification, apply ONLY the corresponding ruleset below:
 
@@ -155,7 +155,7 @@ SEGMENTATION:
       },
     ],
     generationConfig: {
-      temperature: 0.0,
+      temperature: 0.1,
       maxOutputTokens: 8192,
       responseMimeType: 'application/json',
       responseSchema: RESPONSE_SCHEMA,
