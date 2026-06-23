@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Read to me",
+    "name": "Read Me Aloud",
     "slug": "makria",
     "version": "1.0.0",
     "orientation": "default",
@@ -17,8 +17,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.olkina.makria",
       "infoPlist": {
-        "NSCameraUsageDescription": "Read to me needs camera access to photograph text for reading.",
-        "NSPhotoLibraryUsageDescription": "Read to me needs photo access to pick an image with text for reading.",
+        "NSCameraUsageDescription": "Read Me Aloud needs camera access to photograph text for reading.",
+        "NSPhotoLibraryUsageDescription": "Read Me Aloud needs photo access to pick an image with text for reading.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -45,8 +45,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Read to me needs photo access to pick an image with text for reading.",
-          "cameraPermission": "Read to me needs camera access to photograph text for reading."
+          "photosPermission": "Read Me Aloud needs photo access to pick an image with text for reading.",
+          "cameraPermission": "Read Me Aloud needs camera access to photograph text for reading."
         }
       ],
     ],

@@ -2,7 +2,7 @@ export type UiLang = 'en' | 'he';
 
 export const UI = {
   en: {
-    appTitle: 'Reader',
+    appTitle: 'Read Me Aloud',
     appSubtitle: 'Scan · Listen · Understand',
     camera: 'Camera',
     gallery: 'Gallery',
