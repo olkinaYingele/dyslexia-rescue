@@ -489,10 +489,10 @@ const styles = StyleSheet.create({
     color: '#51606F',
   },
   title: {
-    fontSize: 40,
+    fontSize: 28,
     fontFamily: 'Fredoka-Bold',
     color: '#181C20',
-    lineHeight: 44,
+    lineHeight: 32,
   },
   subtitle: {
     fontSize: 14,
