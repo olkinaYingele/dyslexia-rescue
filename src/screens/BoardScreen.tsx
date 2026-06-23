@@ -255,18 +255,18 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
   // supported by the native animated module. Use addListener instead.
   const normalBorderAnim = useRef(new Animated.Value(2)).current;
   const activeBorderAnim = useRef(new Animated.Value(3.5)).current;
-  const badgeSizeAnim    = useRef(new Animated.Value(14)).current;
-  const badgeRadiusAnim  = useRef(new Animated.Value(7)).current;
-  const badgeFontAnim    = useRef(new Animated.Value(7)).current;
+  const badgeSizeAnim    = useRef(new Animated.Value(20)).current;
+  const badgeRadiusAnim  = useRef(new Animated.Value(10)).current;
+  const badgeFontAnim    = useRef(new Animated.Value(10)).current;
 
   useEffect(() => {
     const listenerId = scaleAnim.addListener(({ value }) => {
       const s = value || 1;
       normalBorderAnim.setValue(2 / s);
       activeBorderAnim.setValue(3.5 / s);
-      badgeSizeAnim.setValue(14 / s);
-      badgeRadiusAnim.setValue(7 / s);
-      badgeFontAnim.setValue(7 / s);
+      badgeSizeAnim.setValue(20 / s);
+      badgeRadiusAnim.setValue(10 / s);
+      badgeFontAnim.setValue(10 / s);
     });
     return () => scaleAnim.removeListener(listenerId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -879,9 +879,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 2,
     right: 2,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -889,7 +889,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 2,
   },
-  badgeText: { color: '#FFF', fontSize: 7, fontWeight: '700' },
+  badgeText: { color: '#FFF', fontSize: 10, fontWeight: '700' },
 
   bottomPanel: {
     backgroundColor: '#F7F9FF',
