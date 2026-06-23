@@ -249,10 +249,9 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
   const isPinching = useRef(false);
   const boxTappedRef = useRef(false);
 
-  // JS-driver animated values for zoom-compensated border and badge.
-  // Cannot use Animated.divide(x, scaleAnim) here because scaleAnim uses
-  // useNativeDriver:true, and borderWidth/width/height/fontSize are not
-  // supported by the native animated module. Use addListener instead.
+  // JS-driver animated values for zoom-compensated borders.
+  // Badge is NOT zoom-compensated — it scales naturally with the image,
+  // which feels correct (zoom in = see bigger numbers).
   const normalBorderAnim = useRef(new Animated.Value(2)).current;
   const activeBorderAnim = useRef(new Animated.Value(3.5)).current;
   const badgeSizeAnim    = useRef(new Animated.Value(20)).current;
@@ -264,9 +263,6 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
       const s = value || 1;
       normalBorderAnim.setValue(2 / s);
       activeBorderAnim.setValue(3.5 / s);
-      badgeSizeAnim.setValue(20 / s);
-      badgeRadiusAnim.setValue(10 / s);
-      badgeFontAnim.setValue(10 / s);
     });
     return () => scaleAnim.removeListener(listenerId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
