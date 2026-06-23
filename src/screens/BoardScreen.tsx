@@ -256,13 +256,19 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
   const activeBorderAnim = useRef(new Animated.Value(3.5)).current;
   const badgeSizeAnim    = useRef(new Animated.Value(20)).current;
   const badgeRadiusAnim  = useRef(new Animated.Value(10)).current;
-  const badgeFontAnim    = useRef(new Animated.Value(10)).current;
+  const badgeFontAnim    = useRef(new Animated.Value(11)).current;
 
   useEffect(() => {
     const listenerId = scaleAnim.addListener(({ value }) => {
       const s = value || 1;
       normalBorderAnim.setValue(2 / s);
       activeBorderAnim.setValue(3.5 / s);
+      // Badge grows with zoom but caps at 26px on screen.
+      // In model coords: min(20, 26/s) — after ×s transform = min(20s, 26).
+      const badgeScreen = Math.min(20 * s, 26);
+      badgeSizeAnim.setValue(badgeScreen / s);
+      badgeRadiusAnim.setValue(badgeScreen / s / 2);
+      badgeFontAnim.setValue(badgeScreen / s * 0.55);
     });
     return () => scaleAnim.removeListener(listenerId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
