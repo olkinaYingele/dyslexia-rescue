@@ -221,6 +221,7 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
   const sessionRef = useRef(0);
   const [imageLayout, setImageLayout] = useState<{ width: number; height: number } | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(null);
+  const imageWrapperRef = useRef<View>(null);
   const [activeParagraph, setActiveParagraph] = useState<Paragraph | null>(null);
   const [currentWordIndex, setCurrentWordIndex] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -273,6 +274,28 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
     return () => scaleAnim.removeListener(listenerId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // На Android onLayout для imageWrapper срабатывает ДО применения верхнего inset
+  // (место под статус-бар у SafeAreaView), отдавая высоту больше реальной на величину
+  // статус-бара. Картинка потом ужимается, но onLayout повторно не стреляет — высота
+  // остаётся завышенной, и рамки уезжают вниз пропорционально (чем ниже бокс, тем сильнее).
+  // measure() читает РЕАЛЬНУЮ текущую высоту после того, как layout устаканился.
+  // Перемеряем: при загрузке картинки (naturalSize), при появлении/скрытии нижней панели,
+  // и через таймер-фолбэк на случай, если inset применился чуть позже первого кадра.
+  useEffect(() => {
+    const remeasure = () => {
+      imageWrapperRef.current?.measure((_x, _y, w, h) => {
+        if (w > 0 && h > 0) {
+          setImageLayout(prev =>
+            prev && prev.width === w && prev.height === h ? prev : { width: w, height: h }
+          );
+        }
+      });
+    };
+    const frame = requestAnimationFrame(remeasure);
+    const timer = setTimeout(remeasure, 120);
+    return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
+  }, [!!activeParagraph, naturalSize]);
 
   useEffect(() => {
     // Конфигурируем аудио: не играть в фоне (по умолчанию iOS может продолжать)
@@ -676,7 +699,7 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
       </View>
 
       {/* Image with boxes */}
-      <View style={styles.imageWrapper} onLayout={onContainerLayout}>
+      <View ref={imageWrapperRef} style={styles.imageWrapper} onLayout={onContainerLayout}>
         <Animated.View
           style={[
             StyleSheet.absoluteFill,
