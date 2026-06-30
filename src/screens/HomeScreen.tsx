@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Alert, Linking, Platform,
+  View, Text, TouchableOpacity, StyleSheet, Alert, Platform,
   ScrollView, Image, Dimensions, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -220,12 +220,6 @@ export default function HomeScreen({ onParagraphsReady, onAudioReady, uiLang, se
     if (!result.canceled) await processImage(result.assets[0].uri);
   };
 
-  const sendFeedback = () => {
-    const phone = '972544525954';
-    const text = encodeURIComponent(t.feedbackMsg);
-    Linking.openURL(`whatsapp://send?phone=${phone}&text=${text}`);
-  };
-
   const openCached = (item: CachedScreen) => {
     onParagraphsReady(item.paragraphs, item.imageUri, item.language || 'he', item.id, true, item.audio, item.category);
   };
@@ -319,11 +313,22 @@ export default function HomeScreen({ onParagraphsReady, onAudioReady, uiLang, se
         })}
       </View>
 
-      {/* Feedback */}
-      <TouchableOpacity style={styles.feedbackBtn} onPress={sendFeedback} activeOpacity={0.7}>
-        <Feather name="message-circle" size={14} color="#72777F" />
-        <Text style={styles.feedbackText}>{t.feedback}</Text>
-      </TouchableOpacity>
+      {/* Cache usage indicator */}
+      {(() => {
+        const MAX = 30;
+        const count = recent.length;
+        const isWarning = count >= MAX - 2;
+        const isFull = count >= MAX;
+        return (
+          <Text style={[styles.cacheInfo, isWarning && styles.cacheInfoWarn]}>
+            {isFull
+              ? (uiLang === 'he' ? `הזיכרון מלא (${count}/${MAX}) · הסריקה הבאה תמחק את הישנה ביותר` : `Storage full (${count}/${MAX}) · next scan will replace oldest`)
+              : isWarning
+              ? (uiLang === 'he' ? `${count}/${MAX} · עוד ${MAX - count} סריקות עד המחיקה האוטומטית` : `${count}/${MAX} · ${MAX - count} scans left before auto-delete`)
+              : (uiLang === 'he' ? `${count}/${MAX} סריקות שמורות` : `${count}/${MAX} scans saved`)}
+          </Text>
+        );
+      })()}
 
       {/* Empty state */}
       {dayGroups.length === 0 && (
@@ -559,18 +564,15 @@ const styles = StyleSheet.create({
     fontFamily: 'Fredoka-Medium',
   },
 
-  feedbackBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    marginBottom: 8,
-  },
-  feedbackText: {
-    fontSize: 13,
+  cacheInfo: {
+    fontSize: 12,
     fontFamily: 'Fredoka-Regular',
-    color: '#72777F',
+    color: '#8E8E93',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  cacheInfoWarn: {
+    color: '#e15a6c',
   },
 
   // Empty state
