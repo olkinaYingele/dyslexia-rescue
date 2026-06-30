@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Alert, Platform,
+  View, Text, TouchableOpacity, StyleSheet, Alert,
   ScrollView, Image, Dimensions, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -150,39 +150,31 @@ export default function HomeScreen({ onParagraphsReady, onAudioReady, uiLang, se
       await new Promise(r => setTimeout(r, 400));
       onParagraphsReady(paragraphs, manipulated.uri, language, cacheId, false, undefined);
 
-      if (Platform.OS === 'android') {
-        // Генерируем TTS в фоне; как только готово — передаём в BoardScreen и сохраняем кэш
-        const tsTts = new Date().toLocaleTimeString('he-IL', { hour12: false });
-        console.log(`[${tsTts}] → TTS batch start (${paragraphs.length} paragraphs) [background]`);
-        generateAllAudio(paragraphs, cacheId)
-          .then(async (audio) => {
-            const tsTtsDone = new Date().toLocaleTimeString('he-IL', { hour12: false });
-            console.log(`[${tsTtsDone}] ← TTS batch done [background]`);
-            onAudioReady(audio);
+      // Генерируем TTS в фоне (обе платформы — Google Cloud TTS);
+      // как только готово — передаём в BoardScreen и сохраняем кэш
+      const tsTts = new Date().toLocaleTimeString('he-IL', { hour12: false });
+      console.log(`[${tsTts}] → TTS batch start (${paragraphs.length} paragraphs) [background]`);
+      generateAllAudio(paragraphs, cacheId)
+        .then(async (audio) => {
+          const tsTtsDone = new Date().toLocaleTimeString('he-IL', { hour12: false });
+          console.log(`[${tsTtsDone}] ← TTS batch done [background]`);
+          onAudioReady(audio);
+          const [thumbUri, imageUri] = await Promise.all([
+            prepareThumb(manipulated.uri, cacheId),
+            prepareFullImage(manipulated.uri, cacheId),
+          ]);
+          await saveToCache(cacheId, { thumbUri, imageUri }, paragraphs, language, audio, category);
+        })
+        .catch(async (e) => {
+          console.warn('[TTS] Failed:', e);
+          try {
             const [thumbUri, imageUri] = await Promise.all([
               prepareThumb(manipulated.uri, cacheId),
               prepareFullImage(manipulated.uri, cacheId),
             ]);
-            await saveToCache(cacheId, { thumbUri, imageUri }, paragraphs, language, audio, category);
-          })
-          .catch(async (e) => {
-            console.warn('[TTS] Failed:', e);
-            try {
-              const [thumbUri, imageUri] = await Promise.all([
-                prepareThumb(manipulated.uri, cacheId),
-                prepareFullImage(manipulated.uri, cacheId),
-              ]);
-              await saveToCache(cacheId, { thumbUri, imageUri }, paragraphs, language, undefined, category);
-            } catch (e2) { console.warn('[Cache] Save failed:', e2); }
-          });
-      } else {
-        Promise.all([
-          prepareThumb(manipulated.uri, cacheId),
-          prepareFullImage(manipulated.uri, cacheId),
-        ]).then(([thumbUri, imageUri]) =>
-          saveToCache(cacheId, { thumbUri, imageUri }, paragraphs, language, undefined, category)
-        ).catch(e => console.warn('[Cache] Save failed:', e));
-      }
+            await saveToCache(cacheId, { thumbUri, imageUri }, paragraphs, language, undefined, category);
+          } catch (e2) { console.warn('[Cache] Save failed:', e2); }
+        });
     } catch (e: any) {
       if (e.name === 'AbortError') return;
       console.warn('[processImage] Error:', e);

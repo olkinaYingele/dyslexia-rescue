@@ -215,6 +215,9 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
   const t = UI[uiLang];
   const uiRTL = uiLang === 'he';
   const soundRef = useRef<Audio.Sound | null>(null);
+  // Если пользователь тапнул абзац пока Google-аудио ещё не готово — сохраняем здесь.
+  // Когда audio придёт через проп, запускаем его автоматически.
+  const pendingParagraphRef = useRef<Paragraph | null>(null);
   // Каждый раз когда начинаем/останавливаем чтение — увеличиваем session.
   // Это инвалидирует старые async-колбэки (didJustFinish от unloaded sound и т.п.),
   // чтобы не было гонок типа "новый абзац начался, но callback старого продолжает играть".
@@ -297,6 +300,15 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
     return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
   }, [!!activeParagraph, naturalSize]);
 
+  // Когда Google-аудио приходит впервые, автоматически воспроизводим отложенный абзац
+  useEffect(() => {
+    if (audio && pendingParagraphRef.current) {
+      const p = pendingParagraphRef.current;
+      pendingParagraphRef.current = null;
+      startReadingAudio(p);
+    }
+  }, [audio]);  // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     // Конфигурируем аудио: не играть в фоне (по умолчанию iOS может продолжать)
     Audio.setAudioModeAsync({
@@ -305,9 +317,9 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
       shouldDuckAndroid: true,
     }).catch(() => {});
 
-    // Прогрев аудио-движка Android — первое expo-av обращение долгое.
+    // Прогрев аудио-движка — первое expo-av обращение долгое.
     // Загружаем и сразу выгружаем первое аудио, чтобы пользователь не ждал на первом тапе.
-    if (Platform.OS === 'android' && audio?.[0]?.segments?.[0]) {
+    if (audio?.[0]?.segments?.[0]) {
       const seg = audio[0].segments[0];
       Audio.Sound.createAsync({ uri: seg.audioUri }).then(({ sound }) => {
         sound.unloadAsync().catch(() => {});
@@ -449,8 +461,9 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
     return { rW, rH, oX, oY };
   };
 
-  // iOS path: использует expo-speech в реальном времени
-  const startReadingIos = useCallback((p: Paragraph) => {
+  // Fallback: живой синтез через expo-speech (если Google-аудио не сгенерировалось).
+  // Зависит от системного TTS устройства; на iOS приглушается беззвучным режимом.
+  const startReadingLive = useCallback((p: Paragraph) => {
     const session = ++sessionRef.current;
     Speech.stop();
     const { words: wordList, lineBreaks: breaks } = parseWords(p.text);
@@ -511,19 +524,21 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
     setTimeout(() => speakSegment(0, 0), 150);
   }, [language]);
 
-  // Android path: играем готовое аудио из кэша через expo-av
-  const startReadingAndroid = useCallback(async (p: Paragraph) => {
+  // Основной путь (обе платформы): играем готовое Google-аудио из кэша через expo-av.
+  // expo-av настроен playsInSilentModeIOS — звучит даже при беззвучном режиме на iOS.
+  const startReadingAudio = useCallback(async (p: Paragraph) => {
     const paragraphAudio = audio?.[p.index];
     if (!paragraphAudio || paragraphAudio.segments.length === 0) {
       // Fallback на expo-speech если аудио нет (например, не сгенерировалось)
-      startReadingIos(p);
+      startReadingLive(p);
       return;
     }
 
     // Новая сессия — инвалидирует все async-колбэки от предыдущих звуков
     const session = ++sessionRef.current;
 
-    // Остановить предыдущее воспроизведение
+    // Остановить предыдущее воспроизведение (expo-av или expo-speech если был fallback)
+    Speech.stop();
     if (soundRef.current) {
       try { await soundRef.current.unloadAsync(); } catch {}
       soundRef.current = null;
@@ -598,19 +613,26 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
     };
 
     playSegment(0);
-  }, [audio, startReadingIos]);
+  }, [audio, startReadingLive]);
 
   const startReading = useCallback((p: Paragraph) => {
-    if (Platform.OS === 'android' && audio) {
-      startReadingAndroid(p);
+    if (audio) {
+      pendingParagraphRef.current = null;
+      startReadingAudio(p);
     } else {
-      startReadingIos(p);
+      // Аудио ещё генерируется — запоминаем абзац, подсвечиваем его визуально,
+      // воспроизведение начнётся автоматически когда audio придёт (~1-3с).
+      pendingParagraphRef.current = p;
+      const { words: wordList, lineBreaks: breaks } = parseWords(p.text);
+      setWords(wordList);
+      setLineBreaks(breaks);
+      setActiveParagraph(p);
     }
-  }, [audio, startReadingIos, startReadingAndroid]);
+  }, [audio, startReadingAudio]);
 
-  // Пауза: Android — через expo-av pauseAsync, iOS — через expo-speech Speech.pause.
+  // Управление зависит от активного источника: плеер expo-av (soundRef) или живой синтез.
   const pauseReading = async () => {
-    if (Platform.OS === 'android' && soundRef.current) {
+    if (soundRef.current) {
       try { await soundRef.current.pauseAsync(); } catch {}
     } else {
       Speech.pause();
@@ -620,7 +642,7 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
   };
 
   const resumeReading = async () => {
-    if (Platform.OS === 'android' && soundRef.current) {
+    if (soundRef.current) {
       try { await soundRef.current.playAsync(); } catch {}
     } else {
       Speech.resume();
