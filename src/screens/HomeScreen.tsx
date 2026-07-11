@@ -134,7 +134,12 @@ export default function HomeScreen({ onParagraphsReady, onAudioReady, uiLang, se
       const t1 = Date.now();
       const tsGemini = new Date().toLocaleTimeString('he-IL', { hour12: false });
       console.log(`[${tsGemini}] → Gemini OCR request`);
-      const { paragraphs, language } = await extractParagraphs(manipulated.base64 || '', controller.signal, category);
+      const { paragraphs, language } = await extractParagraphs(
+        manipulated.base64 || '',
+        controller.signal,
+        category,
+        () => setStatus(t.loaderRetry),
+      );
       const tsGeminiDone = new Date().toLocaleTimeString('he-IL', { hour12: false });
       console.log(`[${tsGeminiDone}] ← Gemini OCR reply: ${Date.now() - t1}ms (${paragraphs.length} paragraphs)`);
       console.log(`⏱ total to board: ${Date.now() - t0}ms`);
@@ -180,6 +185,8 @@ export default function HomeScreen({ onParagraphsReady, onAudioReady, uiLang, se
       console.warn('[processImage] Error:', e);
       if (e.message === 'NO_INTERNET') {
         showError(...t.errNoInternet);
+      } else if (e.message === 'LOCATION_ERROR') {
+        showError(...t.errLocation);
       } else if (e.message === 'EMPTY_RESPONSE') {
         showError(...t.errNoText);
       } else {
