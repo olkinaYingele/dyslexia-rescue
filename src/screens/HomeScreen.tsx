@@ -187,6 +187,12 @@ export default function HomeScreen({ onParagraphsReady, onAudioReady, uiLang, se
         showError(...t.errNoInternet);
       } else if (e.message === 'LOCATION_ERROR') {
         showError(...t.errLocation);
+      } else if (e.message === 'SAFETY_ERROR') {
+        showError(...t.errSafety);
+      } else if (e.message === 'INVALID_IMAGE') {
+        showError(...t.errInvalidImage);
+      } else if (e.message === 'SERVICE_ERROR') {
+        showError(...t.errService);
       } else if (e.message === 'EMPTY_RESPONSE') {
         showError(...t.errNoText);
       } else {

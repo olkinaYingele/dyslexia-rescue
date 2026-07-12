@@ -75,7 +75,7 @@ const RESPONSE_SCHEMA = {
 export type ImageCategory = 'auto' | 'document' | 'whiteboard' | 'menu';
 
 export async function extractParagraphs(base64: string, signal?: AbortSignal, category: ImageCategory = 'auto', onRetry?: () => void): Promise<{ paragraphs: Paragraph[]; language: string }> {
-  const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
   const classificationBlock = category === 'auto'
     ? `CRITICAL STEP 0 — PRE-CLASSIFICATION (Internal Logic):
@@ -219,9 +219,23 @@ SEGMENTATION:
   if (!response!.ok) {
     const errText = await response!.text();
     console.warn(`[Gemini] API error ${response!.status}:`, errText);
-    // Detect geographic restriction — common for users in Russia/Belarus without VPN
-    if (errText.includes('User location is not supported') || errText.includes('location') && response!.status === 400) {
-      throw new Error('LOCATION_ERROR');
+    if (response!.status === 400) {
+      if (errText.includes('User location is not supported') || errText.includes('location')) {
+        throw new Error('LOCATION_ERROR');
+      }
+      if (errText.includes('SAFETY') || errText.includes('safety')) {
+        throw new Error('SAFETY_ERROR');
+      }
+      if (errText.includes('image') || errText.includes('IMAGE') || errText.includes('mime')) {
+        throw new Error('INVALID_IMAGE');
+      }
+      throw new Error('API_ERROR');
+    }
+    if (response!.status === 404) {
+      throw new Error('SERVICE_ERROR');
+    }
+    if (response!.status === 503) {
+      throw new Error('SERVICE_ERROR');
     }
     throw new Error('API_ERROR');
   }
