@@ -20,47 +20,6 @@ export interface Paragraph {
   segments: TextSegment[];  // splitted by language
 }
 
-const SIMPLE_RESPONSE_SCHEMA = {
-  type: 'object',
-  properties: {
-    documentLanguage: { type: 'string' },
-    paragraphs: {
-      type: 'array',
-      minItems: 1,
-      maxItems: 1,
-      items: {
-        type: 'object',
-        properties: {
-          text: { type: 'string', description: 'All visible text from the image, exactly as written.' },
-          boundingBox: {
-            type: 'object',
-            properties: {
-              ymin: { type: 'number' },
-              xmin: { type: 'number' },
-              ymax: { type: 'number' },
-              xmax: { type: 'number' },
-            },
-            required: ['ymin', 'xmin', 'ymax', 'xmax'],
-          },
-          segments: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                text: { type: 'string' },
-                language: { type: 'string' },
-              },
-              required: ['text', 'language'],
-            },
-          },
-        },
-        required: ['text', 'boundingBox', 'segments'],
-      },
-    },
-  },
-  required: ['documentLanguage', 'paragraphs'],
-};
-
 const RESPONSE_SCHEMA = {
   type: 'object',
   properties: {
@@ -144,100 +103,6 @@ async function geminiRawOcr(base64: string, signal?: AbortSignal): Promise<strin
   const text = parts.find((p: any) => !p.thought)?.text ?? parts[0]?.text ?? '';
   console.log('[Auto] OCR text:', text);
   return text.trim();
-}
-
-async function geminiStructure(base64: string, rawText: string, signal?: AbortSignal): Promise<{ paragraphs: Paragraph[]; language: string }> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-
-  const systemInstruction = `You are a text layout engine. The OCR text from this image has already been extracted:
-
-═══════════════════════════════════
-${rawText}
-═══════════════════════════════════
-
-Your task:
-1. Identify where each logical paragraph appears in the image.
-2. Copy the text EXACTLY as provided above — do NOT change, correct, or rewrite any word.
-3. Group consecutive lines that form one paragraph into a single paragraph object.
-4. Return bounding boxes as ymin/xmin/ymax/xmax in 0–1000 scale.
-5. Return segments: split by language only if foreign words appear; otherwise one segment per paragraph.
-6. "documentLanguage" = dominant ISO 639-1 code.
-
-CRITICAL: You are NOT doing OCR. You already have the text. Only find where paragraphs are located.`;
-
-  const body = JSON.stringify({
-    systemInstruction: { parts: [{ text: systemInstruction }] },
-    contents: [{
-      parts: [
-        { inline_data: { mime_type: 'image/jpeg', data: base64 } },
-        { text: 'Locate each paragraph in the image and return its bounding box. Use only the text provided in the system instruction.' },
-      ],
-    }],
-    generationConfig: {
-      temperature: 0.1,
-      maxOutputTokens: 8192,
-      responseMimeType: 'application/json',
-      responseSchema: RESPONSE_SCHEMA,
-      thinkingConfig: { thinkingBudget: 0 },
-    },
-    safetySettings: [
-      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT',  threshold: 'BLOCK_NONE' },
-      { category: 'HARM_CATEGORY_HARASSMENT',         threshold: 'BLOCK_NONE' },
-      { category: 'HARM_CATEGORY_HATE_SPEECH',        threshold: 'BLOCK_NONE' },
-      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',  threshold: 'BLOCK_NONE' },
-    ],
-  });
-
-  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal });
-  if (!res.ok) {
-    const errText = await res.text();
-    console.warn('[Hybrid] Step 2 error:', errText.slice(0, 300));
-    // Fall back to single-paragraph wrapping the already-extracted text
-    const lang = /[֐-׿]/.test(rawText) ? 'he' : /[Ѐ-ӿ]/.test(rawText) ? 'ru' : 'en';
-    return {
-      paragraphs: [{ id: '0', index: 0, text: rawText, box: { x: 0, y: 0, width: 1, height: 1 }, segments: [{ text: rawText, language: lang }] }],
-      language: lang,
-    };
-  }
-
-  const data = await res.json();
-  const parts = data.candidates?.[0]?.content?.parts || [];
-  const content = (parts.find((p: any) => !p.thought)?.text ?? parts[0]?.text ?? '').replace(/```json|```/g, '').trim();
-  console.log('[Hybrid] Step 2 content:', content.slice(0, 500));
-
-  let parsed: any;
-  try {
-    parsed = JSON.parse(content);
-  } catch {
-    const lang = /[֐-׿]/.test(rawText) ? 'he' : /[Ѐ-ӿ]/.test(rawText) ? 'ru' : 'en';
-    return {
-      paragraphs: [{ id: '0', index: 0, text: rawText, box: { x: 0, y: 0, width: 1, height: 1 }, segments: [{ text: rawText, language: lang }] }],
-      language: lang,
-    };
-  }
-
-  const language = parsed.documentLanguage || (/[֐-׿]/.test(rawText) ? 'he' : 'en');
-  const paragraphs = ((parsed.paragraphs || []) as any[])
-    .map((item: any) => {
-      const text = item.text?.trim() || '';
-      const segments: TextSegment[] = (item.segments && item.segments.length > 0)
-        ? item.segments.map((s: any) => ({ text: s.text || '', language: s.language || language }))
-        : [{ text, language }];
-      return {
-        text,
-        box: {
-          x:      (item.boundingBox?.xmin ?? 0) / 1000,
-          y:      (item.boundingBox?.ymin ?? 0) / 1000,
-          width:  ((item.boundingBox?.xmax ?? 0) - (item.boundingBox?.xmin ?? 0)) / 1000,
-          height: ((item.boundingBox?.ymax ?? 0) - (item.boundingBox?.ymin ?? 0)) / 1000,
-        },
-        segments,
-      };
-    })
-    .filter((p) => p.text.length > 0)
-    .map((p, index): Paragraph => ({ ...p, id: `p-${index}`, index }));
-
-  return { paragraphs, language };
 }
 
 export async function extractParagraphs(base64: string, signal?: AbortSignal, category: ImageCategory = 'auto', onRetry?: () => void): Promise<{ paragraphs: Paragraph[]; language: string }> {
@@ -413,7 +278,7 @@ Scan your generated paragraphs. If you detect phrases like "מ"ר", "קומה", 
   if (category === 'auto') {
     console.log('\n[Auto] Starting Gemini OCR');
     try {
-      const rawText = await visionOcr(base64, signal);
+      const rawText = await geminiRawOcr(base64, signal);
       if (!rawText) throw new Error('EMPTY_RESPONSE');
       const lang = /[֐-׿]/.test(rawText) ? 'he' : /[Ѐ-ӿ]/.test(rawText) ? 'ru' : 'en';
       return {
