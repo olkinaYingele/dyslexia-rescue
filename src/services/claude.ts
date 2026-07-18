@@ -74,6 +74,47 @@ const RESPONSE_SCHEMA = {
 
 export type ImageCategory = 'auto' | 'document' | 'whiteboard' | 'menu' | 'cursive';
 
+async function geminiCursiveOcr(base64: string, signal?: AbortSignal): Promise<string> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+  const systemInstruction = `You are a high-performance Hebrew OCR specialist. Your sole task is to transcribe sloppy, handwritten cursive Hebrew text (כתב יד עברי רהוט) from personal diaries or medical logs into clean, structured, readable plain text.
+
+CRITICAL RULES:
+1. Output ONLY the raw transcribed text. Do NOT wrap it in JSON, XML, or markdown blocks.
+2. Maintain the timeline structure: write each date on a new line, followed by its description.
+3. Apply domain context (Medical/Family/Seizure diary):
+   - Translate visual strokes logically. If you see shapes resembling "שוקי שוורץ" or "קומה", understand that in a medical context, these are misreadings of words like "פנרגן" (Phenergan), "בסלון" (in the living room), "דקות" (minutes), or "בבית" (at home). Correct them using healthy human logic.
+4. Read Right-to-Left (RTL) and top-to-bottom.`;
+
+  const body = JSON.stringify({
+    systemInstruction: { parts: [{ text: systemInstruction }] },
+    contents: [{
+      parts: [
+        { inline_data: { mime_type: 'image/jpeg', data: base64 } },
+        { text: 'Transcribe all the handwritten text in this image. Output plain text only.' },
+      ],
+    }],
+    generationConfig: {
+      temperature: 0.1,
+      maxOutputTokens: 4096,
+      thinkingConfig: { thinkingBudget: 2048 },
+    },
+    safetySettings: [
+      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT',  threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_HARASSMENT',         threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_HATE_SPEECH',        threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',  threshold: 'BLOCK_NONE' },
+    ],
+  });
+
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal });
+  if (!res.ok) throw new Error(`CURSIVE_OCR_ERROR_${res.status}`);
+  const data = await res.json();
+  const parts = data.candidates?.[0]?.content?.parts || [];
+  const text = parts.find((p: any) => !p.thought)?.text ?? parts[0]?.text ?? '';
+  console.log('[Cursive] OCR text:', text);
+  return text.replace(/```[\w]*\n?/g, '').trim();
+}
+
 async function geminiRawOcr(base64: string, signal?: AbortSignal): Promise<string> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
   const body = JSON.stringify({
@@ -273,6 +314,26 @@ Scan your generated paragraphs. If you detect phrases like "מ"ר", "קומה", 
       { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',  threshold: 'BLOCK_NONE' },
     ],
   });
+
+  // Cursive/Diary mode: plain text OCR, no JSON, no bounding boxes
+  if (category === 'cursive') {
+    console.log('\n[Cursive] Starting plain-text diary OCR');
+    try {
+      const rawText = await geminiCursiveOcr(base64, signal);
+      if (!rawText) throw new Error('EMPTY_RESPONSE');
+      return {
+        paragraphs: [{
+          id: '0', index: 0, text: rawText,
+          box: { x: 0, y: 0, width: 1, height: 1 },
+          segments: [{ text: rawText, language: 'he' }],
+        }],
+        language: 'he',
+      };
+    } catch (e: any) {
+      if (e.name === 'AbortError') throw e;
+      console.warn('[Cursive] OCR failed, falling back to JSON path:', e.message);
+    }
+  }
 
   // Auto mode: Gemini Flash plain OCR (no system instruction, no JSON schema)
   if (category === 'auto') {
