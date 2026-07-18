@@ -20,6 +20,47 @@ export interface Paragraph {
   segments: TextSegment[];  // splitted by language
 }
 
+const SIMPLE_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    documentLanguage: { type: 'string' },
+    paragraphs: {
+      type: 'array',
+      minItems: 1,
+      maxItems: 1,
+      items: {
+        type: 'object',
+        properties: {
+          text: { type: 'string', description: 'All visible text from the image, exactly as written.' },
+          boundingBox: {
+            type: 'object',
+            properties: {
+              ymin: { type: 'number' },
+              xmin: { type: 'number' },
+              ymax: { type: 'number' },
+              xmax: { type: 'number' },
+            },
+            required: ['ymin', 'xmin', 'ymax', 'xmax'],
+          },
+          segments: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                text: { type: 'string' },
+                language: { type: 'string' },
+              },
+              required: ['text', 'language'],
+            },
+          },
+        },
+        required: ['text', 'boundingBox', 'segments'],
+      },
+    },
+  },
+  required: ['documentLanguage', 'paragraphs'],
+};
+
 const RESPONSE_SCHEMA = {
   type: 'object',
   properties: {
@@ -74,6 +115,131 @@ const RESPONSE_SCHEMA = {
 
 export type ImageCategory = 'auto' | 'document' | 'whiteboard' | 'menu' | 'cursive';
 
+async function geminiRawOcr(base64: string, signal?: AbortSignal): Promise<string> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+  const body = JSON.stringify({
+    contents: [{
+      parts: [
+        { inline_data: { mime_type: 'image/jpeg', data: base64 } },
+        { text: 'Please transcribe all the text you see in this image. Return only the transcribed text, preserving the original language and reading order.' },
+      ],
+    }],
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 4096,
+      thinkingConfig: { thinkingBudget: 0 },
+    },
+    safetySettings: [
+      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT',  threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_HARASSMENT',         threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_HATE_SPEECH',        threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',  threshold: 'BLOCK_NONE' },
+    ],
+  });
+
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal });
+  if (!res.ok) throw new Error(`OCR_STEP1_ERROR_${res.status}`);
+  const data = await res.json();
+  const parts = data.candidates?.[0]?.content?.parts || [];
+  const text = parts.find((p: any) => !p.thought)?.text ?? parts[0]?.text ?? '';
+  console.log('[Hybrid] Step 1 OCR text:', text);
+  return text.trim();
+}
+
+async function geminiStructure(base64: string, rawText: string, signal?: AbortSignal): Promise<{ paragraphs: Paragraph[]; language: string }> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+  const systemInstruction = `You are a text layout engine. The OCR text from this image has already been extracted:
+
+═══════════════════════════════════
+${rawText}
+═══════════════════════════════════
+
+Your task:
+1. Identify where each logical paragraph appears in the image.
+2. Copy the text EXACTLY as provided above — do NOT change, correct, or rewrite any word.
+3. Group consecutive lines that form one paragraph into a single paragraph object.
+4. Return bounding boxes as ymin/xmin/ymax/xmax in 0–1000 scale.
+5. Return segments: split by language only if foreign words appear; otherwise one segment per paragraph.
+6. "documentLanguage" = dominant ISO 639-1 code.
+
+CRITICAL: You are NOT doing OCR. You already have the text. Only find where paragraphs are located.`;
+
+  const body = JSON.stringify({
+    systemInstruction: { parts: [{ text: systemInstruction }] },
+    contents: [{
+      parts: [
+        { inline_data: { mime_type: 'image/jpeg', data: base64 } },
+        { text: 'Locate each paragraph in the image and return its bounding box. Use only the text provided in the system instruction.' },
+      ],
+    }],
+    generationConfig: {
+      temperature: 0.1,
+      maxOutputTokens: 8192,
+      responseMimeType: 'application/json',
+      responseSchema: RESPONSE_SCHEMA,
+      thinkingConfig: { thinkingBudget: 0 },
+    },
+    safetySettings: [
+      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT',  threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_HARASSMENT',         threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_HATE_SPEECH',        threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',  threshold: 'BLOCK_NONE' },
+    ],
+  });
+
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal });
+  if (!res.ok) {
+    const errText = await res.text();
+    console.warn('[Hybrid] Step 2 error:', errText.slice(0, 300));
+    // Fall back to single-paragraph wrapping the already-extracted text
+    const lang = /[֐-׿]/.test(rawText) ? 'he' : /[Ѐ-ӿ]/.test(rawText) ? 'ru' : 'en';
+    return {
+      paragraphs: [{ id: '0', index: 0, text: rawText, box: { x: 0, y: 0, width: 1, height: 1 }, segments: [{ text: rawText, language: lang }] }],
+      language: lang,
+    };
+  }
+
+  const data = await res.json();
+  const parts = data.candidates?.[0]?.content?.parts || [];
+  const content = (parts.find((p: any) => !p.thought)?.text ?? parts[0]?.text ?? '').replace(/```json|```/g, '').trim();
+  console.log('[Hybrid] Step 2 content:', content.slice(0, 500));
+
+  let parsed: any;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    const lang = /[֐-׿]/.test(rawText) ? 'he' : /[Ѐ-ӿ]/.test(rawText) ? 'ru' : 'en';
+    return {
+      paragraphs: [{ id: '0', index: 0, text: rawText, box: { x: 0, y: 0, width: 1, height: 1 }, segments: [{ text: rawText, language: lang }] }],
+      language: lang,
+    };
+  }
+
+  const language = parsed.documentLanguage || (/[֐-׿]/.test(rawText) ? 'he' : 'en');
+  const paragraphs = ((parsed.paragraphs || []) as any[])
+    .map((item: any) => {
+      const text = item.text?.trim() || '';
+      const segments: TextSegment[] = (item.segments && item.segments.length > 0)
+        ? item.segments.map((s: any) => ({ text: s.text || '', language: s.language || language }))
+        : [{ text, language }];
+      return {
+        text,
+        box: {
+          x:      (item.boundingBox?.xmin ?? 0) / 1000,
+          y:      (item.boundingBox?.ymin ?? 0) / 1000,
+          width:  ((item.boundingBox?.xmax ?? 0) - (item.boundingBox?.xmin ?? 0)) / 1000,
+          height: ((item.boundingBox?.ymax ?? 0) - (item.boundingBox?.ymin ?? 0)) / 1000,
+        },
+        segments,
+      };
+    })
+    .filter((p) => p.text.length > 0)
+    .map((p, index): Paragraph => ({ ...p, id: `p-${index}`, index }));
+
+  return { paragraphs, language };
+}
+
 export async function extractParagraphs(base64: string, signal?: AbortSignal, category: ImageCategory = 'auto', onRetry?: () => void): Promise<{ paragraphs: Paragraph[]; language: string }> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
@@ -81,22 +247,15 @@ export async function extractParagraphs(base64: string, signal?: AbortSignal, ca
     ? `The user has already classified this image. Skip classification and apply ONLY the ruleset for ${
         category === 'document' ? 'MODE A' : category === 'whiteboard' ? 'MODE B' : category === 'cursive' ? 'MODE E' : 'MODE D'
       } below:`
-    : `PHASE 1 — LAYOUT CLASSIFICATION (internal step, do not output):
-Visually analyze the image and assign it to exactly ONE mode:
-- MODE A (Structured / Linear): Dense printed or handwritten papers read line-by-line — contracts, book pages, school worksheets, formal documents. Process top-to-bottom, merge contiguous lines of the same paragraph into one block, handle tables row-by-row.
-- MODE B (Spatial Clustering / Columnar): Multi-column whiteboards, flyers, speech bubbles, handwritten diaries, dated lists. NEVER read across columns. Each distinct date marks a new paragraph. Bounding box must wrap date + its full line.
-- MODE C (Technical / Diagram): Schematics, truth tables, physics circuits with annotations. Separate logic tables from diagrams. Treat formulas and logical expressions as standalone paragraphs. Extract every text label near drawing lines.
-- MODE D (Menu / Price List): Printed restaurant menu, product catalog, or price table. Each item + price = one paragraph. Strip decorative leader dots (......) replacing with " | ". Leave "segments" array empty [].
-
-PHASE 2 — DOMAIN VOCABULARY ANCHORING (apply to the chosen mode):
-From the first 3 lines of visible text, identify the domain (e.g., medical diary, Bible study, school topic, legal contract, menu). Calibrate your vocabulary to that domain:
-- Medical / health diary: terms like פרכוסים, פנרגן, דקות, בסלון are expected. Isolated 3–4 digit numbers like "823", "2049" are misreadings of Hebrew cursive — re-examine.
-- Biblical / school study: terms like שאול המלך, אתונות, בר כוכבא are correct — do not replace with modern terms.
-- Legal contract: complex formal terms like שכר לימוד, כתב התחייבות are correct.
-- Menu / price list: item names and prices are expected — no medical or school vocabulary.
-Strict rule: if a cursive word is illegible, degrade gracefully from visual strokes. NEVER fill gaps with real-estate boilerplate (מ"ר, שוקי שוורץ, קומה 6) or placeholder numbers unless explicitly visible.
-
-Apply the ruleset for the chosen mode:`;
+    : `You are a high-performance, production-grade Hebrew OCR engine. Your sole task is to transcribe the text from the image into a single, clean, cohesive block of text.
+CRITICAL OUTPUT RULE: Output ONLY the raw transcribed text. Do NOT output JSON, XML, HTML, or markdown code blocks. Do NOT include any coordinates, bounding boxes, or metadata. Do NOT add any introductory or concluding remarks.
+TRANSCRIPTION & LAYOUT RULES:
+1. Natural Reading Flow: Process text in logical reading order. For Hebrew, read Right to Left (RTL), Top to Bottom.
+2. Column Handling: Never read across columns. Read the entire right column first, then the left column.
+3. Preserve Line Breaks: Use line breaks and paragraph breaks to match the visual layout.
+ANTI-HALLUCINATION & CONTEXT ANCHORING:
+Analyze the context of the first 3 lines and use phonetic spelling correction matching that domain.
+NEVER hallucinate real-estate boilerplate. If you see ambiguous characters, do not translate them into "מ"ר", "קומה", or "שוקי שוורץ" unless explicitly printed. Map them to logical words within the identified context.`;
 
   const rulesA = `══════════════════════════════════════════════════════════════════════════
 RULES FOR CATEGORY A: PRINTED DOCUMENT (Paragraph Aggregation Mode)
@@ -188,9 +347,11 @@ RULES FOR MODE C: TECHNICAL / DIAGRAM
     : category === 'whiteboard' ? rulesB
     : category === 'cursive' ? rulesE
     : category === 'menu' ? rulesC
-    : `${rulesA}\n\n${rulesB}\n\n${rulesAutoModeC}\n\n${rulesC}`;
+    : '';  // auto: no extra rules, classificationBlock is the full prompt
 
-  const systemInstruction = `You are an advanced, context-aware OCR and spatial analysis engine. Your task is to analyze the image and extract text strictly into the required JSON structure.
+  const systemInstruction = category === 'auto'
+    ? classificationBlock  // simple control prompt — no extra rules
+    : `You are an advanced, context-aware OCR and spatial analysis engine. Your task is to analyze the image and extract text strictly into the required JSON structure.
 
 ${classificationBlock}
 
@@ -222,23 +383,22 @@ PHASE 4 — FINAL REPETITION CHECK (before outputting):
 Scan your generated paragraphs. If you detect phrases like "מ"ר", "קומה", "שוקי שוורץ", or numbers like "823", "1,752", "2049" repeating across paragraphs in an image that is NOT about real estate — discard the draft and re-transcribe using strict phonetic cursive decoding aligned with the image's actual domain. If any two paragraphs share identical "text" values — you have a hallucination loop, discard duplicates and re-read.`;
 
   const body = JSON.stringify({
-    systemInstruction: { parts: [{ text: systemInstruction }] },
+    ...(category !== 'auto' && { systemInstruction: { parts: [{ text: systemInstruction }] } }),
     contents: [
       {
         parts: [
           { inline_data: { mime_type: 'image/jpeg', data: base64 } },
           { text: category === 'auto'
-              ? 'Phase 1: Classify this image as Mode A (structured document), Mode B (spatial/columnar/handwritten), Mode C (technical/diagram), or Mode D (menu/price list). Phase 2: Identify the domain from the first 3 lines and anchor your vocabulary. Then apply the matching ruleset. Transcribe every word exactly. Return bounding boxes as ymin/xmin/ymax/xmax in 0–1000 scale.'
-              : `This is a ${category === 'document' ? 'Mode A structured document' : category === 'whiteboard' ? 'Mode B handwritten/spatial image' : 'Mode D menu or price list'}. Apply the ruleset for this mode. Transcribe every word exactly. Return bounding boxes as ymin/xmin/ymax/xmax in 0–1000 scale.`
+              ? 'Please transcribe all the text you see in this image. Return only the transcribed text, preserving the original language and reading order.'
+              : `This is a ${category === 'document' ? 'Mode A structured document' : category === 'whiteboard' ? 'Mode B handwritten/spatial image' : category === 'cursive' ? 'Mode E cursive Hebrew diary' : 'Mode D menu or price list'}. Apply the ruleset for this mode. Transcribe every word exactly. Return bounding boxes as ymin/xmin/ymax/xmax in 0–1000 scale.`
           },
         ],
       },
     ],
     generationConfig: {
-      temperature: 0.1,
+      temperature: category === 'auto' ? 0.7 : 0.1,
       maxOutputTokens: 8192,
-      responseMimeType: 'application/json',
-      responseSchema: RESPONSE_SCHEMA,
+      ...(category !== 'auto' && { responseMimeType: 'application/json', responseSchema: RESPONSE_SCHEMA }),
       thinkingConfig: { thinkingBudget: (category === 'whiteboard' || category === 'cursive') ? 2048 : 0 },
     },
     safetySettings: [
@@ -248,6 +408,20 @@ Scan your generated paragraphs. If you detect phrases like "מ"ר", "קומה", 
       { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',  threshold: 'BLOCK_NONE' },
     ],
   });
+
+  // Hybrid pipeline for auto mode: Step 1 = plain OCR, Step 2 = layout structure
+  if (category === 'auto') {
+    console.log('\n[Hybrid] Starting two-step OCR pipeline');
+    try {
+      const rawText = await geminiRawOcr(base64, signal);
+      if (!rawText) throw new Error('EMPTY_RESPONSE');
+      return await geminiStructure(base64, rawText, signal);
+    } catch (e: any) {
+      if (e.name === 'AbortError') throw e;
+      console.warn('[Hybrid] Pipeline failed, falling back to single-call auto:', e.message);
+      // Fall through to standard single-call path below with auto mode
+    }
+  }
 
   const requestId = Date.now();
   console.log('\n\n\n');
@@ -320,6 +494,20 @@ Scan your generated paragraphs. If you detect phrases like "מ"ר", "קומה", 
 
   const cleanContent = content.replace(/```json|```/g, '').trim();
   console.log('[Gemini] Clean content length:', cleanContent.length);
+
+  // Auto mode returns plain text — wrap it into our paragraph structure
+  if (category === 'auto') {
+    const lang = /[֐-׿]/.test(cleanContent) ? 'he'
+      : /[Ѐ-ӿ]/.test(cleanContent) ? 'ru'
+      : 'en';
+    const paragraph = {
+      id: '0', index: 0,
+      text: cleanContent,
+      box: { x: 0, y: 0, width: 1, height: 1 },
+      segments: [{ text: cleanContent, language: lang }],
+    };
+    return { paragraphs: [paragraph], language: lang };
+  }
 
   let parsed: any;
   try {

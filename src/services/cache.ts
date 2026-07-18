@@ -48,8 +48,8 @@ async function saveImageFile(base64: string, fileName: string): Promise<string> 
 export async function prepareFullImage(imageUri: string, cacheId: string): Promise<string> {
   const result = await ImageManipulator.manipulateAsync(
     imageUri,
-    [{ resize: { width: 500 } }],
-    { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+    [{ resize: { width: 1500 } }],
+    { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG, base64: true }
   );
   return saveImageFile(result.base64 || '', `${cacheId}_full.jpg`);
 }
