@@ -1,4 +1,5 @@
 import { GEMINI_API_KEY } from '../config';
+import { mlkitOcr } from './mlkit';
 
 export interface BoundingBox {
   x: number;
@@ -353,11 +354,11 @@ Scan your generated paragraphs. If you detect phrases like "מ"ר", "קומה", 
     }
   }
 
-  // Auto mode: Gemini Flash plain OCR (no system instruction, no JSON schema)
+  // Auto mode: ML Kit on Android (on-device, Google's engine), Gemini on iOS
   if (category === 'auto') {
-    console.log('\n[Auto] Starting Gemini OCR');
+    console.log('\n[Auto] Starting OCR');
     try {
-      const rawText = await geminiRawOcr(base64, signal);
+      const rawText = (await mlkitOcr(base64)) ?? await geminiRawOcr(base64, signal);
       if (!rawText) throw new Error('EMPTY_RESPONSE');
       const lang = /[֐-׿]/.test(rawText) ? 'he' : /[Ѐ-ӿ]/.test(rawText) ? 'ru' : 'en';
       return {
