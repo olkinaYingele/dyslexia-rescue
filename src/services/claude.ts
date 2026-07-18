@@ -1,4 +1,4 @@
-import { GEMINI_API_KEY } from '../config';
+import { GEMINI_API_KEY, VISION_API_KEY } from '../config';
 
 export interface BoundingBox {
   x: number;
@@ -115,34 +115,20 @@ const RESPONSE_SCHEMA = {
 
 export type ImageCategory = 'auto' | 'document' | 'whiteboard' | 'menu' | 'cursive';
 
-async function geminiRawOcr(base64: string, signal?: AbortSignal): Promise<string> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+async function visionOcr(base64: string, signal?: AbortSignal): Promise<string> {
+  const url = `https://vision.googleapis.com/v1/images:annotate?key=${VISION_API_KEY}`;
   const body = JSON.stringify({
-    contents: [{
-      parts: [
-        { inline_data: { mime_type: 'image/jpeg', data: base64 } },
-        { text: 'Please transcribe all the text you see in this image. Return only the transcribed text, preserving the original language and reading order.' },
-      ],
+    requests: [{
+      image: { content: base64 },
+      features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
     }],
-    generationConfig: {
-      temperature: 0.7,
-      maxOutputTokens: 4096,
-      thinkingConfig: { thinkingBudget: 0 },
-    },
-    safetySettings: [
-      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT',  threshold: 'BLOCK_NONE' },
-      { category: 'HARM_CATEGORY_HARASSMENT',         threshold: 'BLOCK_NONE' },
-      { category: 'HARM_CATEGORY_HATE_SPEECH',        threshold: 'BLOCK_NONE' },
-      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',  threshold: 'BLOCK_NONE' },
-    ],
   });
 
   const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal });
-  if (!res.ok) throw new Error(`OCR_STEP1_ERROR_${res.status}`);
+  if (!res.ok) throw new Error(`VISION_ERROR_${res.status}`);
   const data = await res.json();
-  const parts = data.candidates?.[0]?.content?.parts || [];
-  const text = parts.find((p: any) => !p.thought)?.text ?? parts[0]?.text ?? '';
-  console.log('[Hybrid] Step 1 OCR text:', text);
+  const text = data.responses?.[0]?.fullTextAnnotation?.text ?? '';
+  console.log('[Vision] OCR text:', text);
   return text.trim();
 }
 
@@ -409,11 +395,11 @@ Scan your generated paragraphs. If you detect phrases like "מ"ר", "קומה", 
     ],
   });
 
-  // Auto mode: plain OCR only — no JSON schema, no system instruction, no attention collapse
+  // Auto mode: Google Vision OCR (same engine as Google Lens) → single paragraph
   if (category === 'auto') {
-    console.log('\n[Auto] Starting plain OCR');
+    console.log('\n[Auto] Starting Vision OCR');
     try {
-      const rawText = await geminiRawOcr(base64, signal);
+      const rawText = await visionOcr(base64, signal);
       if (!rawText) throw new Error('EMPTY_RESPONSE');
       const lang = /[֐-׿]/.test(rawText) ? 'he' : /[Ѐ-ӿ]/.test(rawText) ? 'ru' : 'en';
       return {
