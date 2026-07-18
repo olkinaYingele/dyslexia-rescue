@@ -72,22 +72,31 @@ const RESPONSE_SCHEMA = {
   required: ['documentLanguage', 'paragraphs'],
 };
 
-export type ImageCategory = 'auto' | 'document' | 'whiteboard' | 'menu';
+export type ImageCategory = 'auto' | 'document' | 'whiteboard' | 'menu' | 'cursive';
 
 export async function extractParagraphs(base64: string, signal?: AbortSignal, category: ImageCategory = 'auto', onRetry?: () => void): Promise<{ paragraphs: Paragraph[]; language: string }> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
-  const classificationBlock = category === 'auto'
-    ? `CRITICAL STEP 0 — PRE-CLASSIFICATION (Internal Logic):
-Before performing OCR or calculating boundaries, visually evaluate the image:
-- CATEGORY A (printed_document): If the image is a scanned page, book, formal contract, printed form, or typed text in standard linear paragraphs/columns. MUST be printed/typed, NOT handwritten.
-- CATEGORY B (whiteboard): If the image contains ANY handwritten text, whiteboard notes, chalkboard notes, notebook pages, hand-drawn mind maps, or lists written by hand (even if they look like tables, schedules, or have column structures). ANY handwritten content MUST go here.
-- CATEGORY C (menu_table): If the image is a printed/typed restaurant menu, printed price list, printed product catalog, or any typed structured table with columnar data. MUST be printed/typed, NOT handwritten.
+  const classificationBlock = category !== 'auto'
+    ? `The user has already classified this image. Skip classification and apply ONLY the ruleset for ${
+        category === 'document' ? 'MODE A' : category === 'whiteboard' ? 'MODE B' : category === 'cursive' ? 'MODE E' : 'MODE D'
+      } below:`
+    : `PHASE 1 — LAYOUT CLASSIFICATION (internal step, do not output):
+Visually analyze the image and assign it to exactly ONE mode:
+- MODE A (Structured / Linear): Dense printed or handwritten papers read line-by-line — contracts, book pages, school worksheets, formal documents. Process top-to-bottom, merge contiguous lines of the same paragraph into one block, handle tables row-by-row.
+- MODE B (Spatial Clustering / Columnar): Multi-column whiteboards, flyers, speech bubbles, handwritten diaries, dated lists. NEVER read across columns. Each distinct date marks a new paragraph. Bounding box must wrap date + its full line.
+- MODE C (Technical / Diagram): Schematics, truth tables, physics circuits with annotations. Separate logic tables from diagrams. Treat formulas and logical expressions as standalone paragraphs. Extract every text label near drawing lines.
+- MODE D (Menu / Price List): Printed restaurant menu, product catalog, or price table. Each item + price = one paragraph. Strip decorative leader dots (......) replacing with " | ". Leave "segments" array empty [].
 
-Based on this classification, apply ONLY the corresponding ruleset below:`
-    : `The user has already classified this image. Skip classification and apply ONLY the ruleset for ${
-        category === 'document' ? 'CATEGORY A' : category === 'whiteboard' ? 'CATEGORY B' : 'CATEGORY C'
-      } below:`;
+PHASE 2 — DOMAIN VOCABULARY ANCHORING (apply to the chosen mode):
+From the first 3 lines of visible text, identify the domain (e.g., medical diary, Bible study, school topic, legal contract, menu). Calibrate your vocabulary to that domain:
+- Medical / health diary: terms like פרכוסים, פנרגן, דקות, בסלון are expected. Isolated 3–4 digit numbers like "823", "2049" are misreadings of Hebrew cursive — re-examine.
+- Biblical / school study: terms like שאול המלך, אתונות, בר כוכבא are correct — do not replace with modern terms.
+- Legal contract: complex formal terms like שכר לימוד, כתב התחייבות are correct.
+- Menu / price list: item names and prices are expected — no medical or school vocabulary.
+Strict rule: if a cursive word is illegible, degrade gracefully from visual strokes. NEVER fill gaps with real-estate boilerplate (מ"ר, שוקי שוורץ, קומה 6) or placeholder numbers unless explicitly visible.
+
+Apply the ruleset for the chosen mode:`;
 
   const rulesA = `══════════════════════════════════════════════════════════════════════════
 RULES FOR CATEGORY A: PRINTED DOCUMENT (Paragraph Aggregation Mode)
@@ -102,16 +111,33 @@ If the document contains tables or grids (cancellation fees, timetables, etc.): 
 5. Handle RTL (Hebrew) and LTR (English) alignment correctly according to standard document flow.`;
 
   const rulesB = `══════════════════════════════════════════════════════════════════════════
-RULES FOR CATEGORY B: WHITEBOARD & SCHEMATICS (Spatial Clustering Mode)
+RULES FOR CATEGORY B: HANDWRITTEN TEXT (Spatial Clustering Mode)
 ══════════════════════════════════════════════════════════════════════════
-1. IGNORE standard linear page layout. Instead, identify isolated spatial clusters, standalone nodes, or floating handwritten text "clouds".
-2. Treat standalone words, circled terms, map nodes, or short labels near lines/arrows as independent, separate paragraph objects. Do NOT merge them with unrelated neighboring text blocks.
-3. CRITICAL FOR DATED LISTS, SCHEDULES & TIMELINES:
-   - Each distinct date (e.g., "30.4", "4.5", "5.5", "7.5") or distinct bullet point marks the start of a NEW, separate paragraph object. NEVER group multiple rows with different dates into a single large paragraph block.
-   - A date and its corresponding handwritten text description written horizontally inline MUST be bound together into the exact same paragraph object. NEVER isolate a date into its own tiny standalone bounding box, and NEVER leave the text description detached from its date.
-   - The bounding box for a scheduled item MUST span horizontally to fully enclose both the date and the entire text line next to it.
-   - Ensure the extracted "text" combines the date and the text in logically correct, human-readable reading order (e.g., "4.5 מבדק באנגלית (שני)").
-4. Ensure "boundingBox" parameters tightly wrap ONLY that specific local cluster, node, or single scheduled row. Prevent massive overlapping bounding boxes.`;
+You are an expert OCR engine specializing in reading cursive Hebrew handwriting (כתב יד עברי) in personal diaries, health logs, school notebooks, and whiteboards.
+
+THE ROOT CAUSE OF FAILURE (CRITICAL): When processing complex JSON with bounding boxes and difficult handwriting simultaneously, the model may experience attention collapse — copying dummy text or numbers (like "823", "1,752.2", "2049") across paragraphs to save compute. YOU MUST DESTROY THIS LOOP. Every paragraph is unique. Do not repeat text or coordinates from previous blocks unless they are identical in the image.
+
+STRUCTURAL SEGMENTATION RULES:
+1. IGNORE standard linear page layout. Identify isolated spatial clusters, standalone nodes, or floating handwritten text "clouds".
+2. Treat standalone words, circled terms, or short labels near arrows as independent paragraph objects. Do NOT merge unrelated clusters.
+3. CRITICAL FOR DATED LISTS, DIARIES & TIMELINES:
+   - Each distinct date (e.g., "28/6/25", "15/4/26") marks the start of a NEW, separate paragraph object. NEVER group multiple dates into one block.
+   - A date and its description on the same horizontal line MUST be in the same paragraph object.
+   - The bounding box MUST span horizontally to fully enclose both the date and the full text line beside it.
+   - "text" must present them in natural reading order (e.g., "28/6/25 בסלון, 6 דקות, 20:45").
+4. Bounding boxes must tightly wrap ONLY that specific cluster or row. No massive overlapping boxes.
+
+STRICT CONTEXTUAL READING — HEBREW HANDWRITING CONTEXT:
+- This is a personal diary or health log. Isolated multi-digit numbers like "823", "1752", "2049" are almost certainly misreadings of Hebrew cursive words. Re-examine those regions.
+- Abbreviations like מ"ר (sq. meters) in this context are almost certainly מ"ג (milligrams), דק' (minutes), or similar medical/time units.
+- If you see what appears to be a real-estate term (floor number, square meters) in a handwritten diary — re-read it as a time, duration, or location word.
+
+FEW-SHOT EXAMPLE — diary with dated entries (coordinates in 0–1000 scale):
+  { "text": "28/6/25 בסלון, 6 דקות, 20:45", "boundingBox": { "ymin": 120, "xmin": 20, "ymax": 170, "xmax": 980 }, "segments": [{ "text": "28/6/25 בסלון, 6 דקות, 20:45", "language": "he" }] }
+  { "text": "29/6/25 כאב ראש, בוקר, 08:30", "boundingBox": { "ymin": 185, "xmin": 20, "ymax": 235, "xmax": 980 }, "segments": [{ "text": "29/6/25 כאב ראש, בוקר, 08:30", "language": "he" }] }
+Note: the two paragraphs have DIFFERENT ymin/ymax values. Coordinates are 0–1000, NOT pixels.
+
+SELF-CHECK before outputting: If any two paragraphs share identical "text", or you see "823" / "1,752" / "2049" / "קומה" as standalone tokens inside Hebrew diary text — halt, re-read those regions, and correct.`;
 
   const rulesC = `══════════════════════════════════════════════════════════════════════════
 RULES FOR CATEGORY C: STRUCTURED TABLES & MENUS (Row-Based Consolidation)
@@ -126,10 +152,43 @@ RULES FOR CATEGORY C: STRUCTURED TABLES & MENUS (Row-Based Consolidation)
    - Never write any objects inside the "segments" array for items in Category C.
 7. Omitting dots and keeping "segments" strictly empty [] is mandatory to ensure complete JSON responses and fast API delivery.`;
 
+  const rulesE = `══════════════════════════════════════════════════════════════════════════
+RULES FOR MODE E: CURSIVE HANDWRITING / DIARY (כתב יד / יומן)
+══════════════════════════════════════════════════════════════════════════
+You are an expert OCR engine specializing in challenging cursive Hebrew handwriting (כתב יד עברי רהוט) in personal diaries, medical logs, and handwritten notes.
+
+ANTI-HALLUCINATION — ATTENTION LOOP COLLAPSE:
+When transcribing complex cursive simultaneously with JSON bounding boxes, the model may copy dummy text or misread cursive letters as numbers. YOU MUST PREVENT THIS:
+- Every paragraph is unique. NEVER copy "text" or coordinates from a previous paragraph.
+- Isolated 3-4 digit numbers like "823", "1752", "2049" appearing inside Hebrew diary text are almost certainly misreadings of cursive Hebrew words — re-examine those strokes carefully.
+- If you see what appears to be a real-estate term (מ"ר, קומה, שוקי שוורץ) in a diary context — it is almost certainly a misread. Re-examine.
+
+TIMELINE SEGMENTATION:
+- Each distinct date (e.g., "28/6/25", "15/4/26") marks the start of a NEW, separate paragraph object.
+- The date AND all its associated description text (until the next date) must be in the SAME paragraph object.
+- Bounding box must span horizontally to fully enclose both the date and all text on that line.
+- Read Hebrew right-to-left. The rightmost token on a line is the first word.
+
+FEW-SHOT EXAMPLE (coordinates in 0–1000 scale):
+Input line: "28/6/25 צבע, בסלון, בבית | 6 דקות | 20:45"
+Output:
+{ "text": "28/6/25 צבע, בסלון, בבית | 6 דקות | 20:45", "boundingBox": { "ymin": 120, "xmin": 20, "ymax": 175, "xmax": 980 }, "segments": [{ "text": "28/6/25 צבע, בסלון, בבית | 6 דקות | 20:45", "language": "he" }] }
+
+COMPLIANCE CHECK: Before outputting, scan for "מ"ר", "קומה", "שוקי שוורץ", "1,752", "823". If found in a diary context — discard and re-transcribe using phonetic cursive decoding.`;
+
+  const rulesAutoModeC = `══════════════════════════════════════════════════════════════════════════
+RULES FOR MODE C: TECHNICAL / DIAGRAM
+══════════════════════════════════════════════════════════════════════════
+1. Separate logic/truth tables from schematic drawings — each is its own paragraph group.
+2. Treat formulas, math equations, and logical expressions as standalone dedicated paragraphs.
+3. Ignore illustrative drawings themselves, but extract every text label and annotation near drawing lines.
+4. For truth tables: each row is one paragraph. Read columns left-to-right within each row.`;
+
   const activeRules = category === 'document' ? rulesA
     : category === 'whiteboard' ? rulesB
+    : category === 'cursive' ? rulesE
     : category === 'menu' ? rulesC
-    : `${rulesA}\n\n${rulesB}\n\n${rulesC}`;
+    : `${rulesA}\n\n${rulesB}\n\n${rulesAutoModeC}\n\n${rulesC}`;
 
   const systemInstruction = `You are an advanced, context-aware OCR and spatial analysis engine. Your task is to analyze the image and extract text strictly into the required JSON structure.
 
@@ -157,7 +216,10 @@ SEGMENTATION:
 - If the entire paragraph is in one language, return ONE segment with the full text.
 - The concatenation of all segments' text MUST equal the paragraph text exactly, character by character including whitespace.
 - Use ISO 639-1 codes: 'he', 'en', 'ru', 'de', 'fr', 'es', 'it', 'ar'.
-- "documentLanguage" must be the dominant ISO 639-1 code (e.g. "he", "en", "ru").`;
+- "documentLanguage" must be the dominant ISO 639-1 code (e.g. "he", "en", "ru").
+
+PHASE 4 — FINAL REPETITION CHECK (before outputting):
+Scan your generated paragraphs. If you detect phrases like "מ"ר", "קומה", "שוקי שוורץ", or numbers like "823", "1,752", "2049" repeating across paragraphs in an image that is NOT about real estate — discard the draft and re-transcribe using strict phonetic cursive decoding aligned with the image's actual domain. If any two paragraphs share identical "text" values — you have a hallucination loop, discard duplicates and re-read.`;
 
   const body = JSON.stringify({
     systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -166,8 +228,8 @@ SEGMENTATION:
         parts: [
           { inline_data: { mime_type: 'image/jpeg', data: base64 } },
           { text: category === 'auto'
-              ? 'Classify image (Category A: printed document, Category B: whiteboard/handwritten, Category C: menu/price list/table), then apply the matching ruleset. Transcribe every word exactly. Return bounding boxes as ymin/xmin/ymax/xmax in 0–1000 scale.'
-              : `This is a ${category === 'document' ? 'Category A printed document' : category === 'whiteboard' ? 'Category B whiteboard/handwritten image' : 'Category C menu or table'}. Apply the ruleset for this category. Transcribe every word exactly. Return bounding boxes as ymin/xmin/ymax/xmax in 0–1000 scale.`
+              ? 'Phase 1: Classify this image as Mode A (structured document), Mode B (spatial/columnar/handwritten), Mode C (technical/diagram), or Mode D (menu/price list). Phase 2: Identify the domain from the first 3 lines and anchor your vocabulary. Then apply the matching ruleset. Transcribe every word exactly. Return bounding boxes as ymin/xmin/ymax/xmax in 0–1000 scale.'
+              : `This is a ${category === 'document' ? 'Mode A structured document' : category === 'whiteboard' ? 'Mode B handwritten/spatial image' : 'Mode D menu or price list'}. Apply the ruleset for this mode. Transcribe every word exactly. Return bounding boxes as ymin/xmin/ymax/xmax in 0–1000 scale.`
           },
         ],
       },
@@ -177,7 +239,7 @@ SEGMENTATION:
       maxOutputTokens: 8192,
       responseMimeType: 'application/json',
       responseSchema: RESPONSE_SCHEMA,
-      thinkingConfig: { thinkingBudget: 0 },
+      thinkingConfig: { thinkingBudget: (category === 'whiteboard' || category === 'cursive') ? 2048 : 0 },
     },
     safetySettings: [
       { category: 'HARM_CATEGORY_DANGEROUS_CONTENT',  threshold: 'BLOCK_NONE' },

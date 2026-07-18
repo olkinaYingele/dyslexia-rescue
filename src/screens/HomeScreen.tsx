@@ -16,6 +16,13 @@ import { UiLang, UI } from '../i18n';
 
 const ONBOARDING_KEY = 'onboarding_seen_v1';
 
+const CAT_ICONS: Record<string, any> = {
+  auto:       require('../../assets/icons/автоматически.png'),
+  document:   require('../../assets/icons/документ.png'),
+  whiteboard: require('../../assets/icons/доска.png'),
+  cursive:    require('../../assets/icons/курсив.png'),
+};
+
 const { width } = Dimensions.get('window');
 const THUMB_SIZE = (width - 48) / 2;
 
@@ -302,8 +309,8 @@ export default function HomeScreen({ onParagraphsReady, onAudioReady, uiLang, se
 
       {/* Category selector */}
       <View style={styles.catRow}>
-        {(['auto', 'document', 'menu', 'whiteboard'] as ImageCategory[]).map(cat => {
-          const label = cat === 'auto' ? t.catAuto : cat === 'document' ? t.catDoc : cat === 'menu' ? t.catMenu : t.catBoard;
+        {(['auto', 'document', 'whiteboard', 'cursive'] as ImageCategory[]).map(cat => {
+          const label = cat === 'auto' ? t.catAuto : cat === 'document' ? t.catDoc : cat === 'whiteboard' ? t.catBoard : t.catCursive;
           const active = category === cat;
           return (
             <TouchableOpacity
@@ -312,6 +319,7 @@ export default function HomeScreen({ onParagraphsReady, onAudioReady, uiLang, se
               onPress={() => handleSetCategory(cat)}
               activeOpacity={0.7}
             >
+              <Image source={CAT_ICONS[cat]} style={[styles.catIcon, active && styles.catIconActive]} />
               <Text style={[styles.catBtnText, active && styles.catBtnTextActive]}>{label}</Text>
             </TouchableOpacity>
           );
@@ -389,7 +397,7 @@ export default function HomeScreen({ onParagraphsReady, onAudioReady, uiLang, se
                           <Text style={[styles.gridDate, uiRTL ? null : { textAlign: 'left' }]}>{formatTime(item.timestamp)}</Text>
                           {item.category && (
                             <Text style={styles.gridCat}>
-                              {item.category === 'document' ? t.catDoc : item.category === 'menu' ? t.catMenu : item.category === 'whiteboard' ? t.catBoard : t.catAuto}
+                              {item.category === 'document' ? t.catDoc : item.category === 'menu' ? t.catMenu : item.category === 'whiteboard' ? t.catBoard : item.category === 'cursive' ? t.catCursive : t.catAuto}
                             </Text>
                           )}
                         </View>
@@ -552,15 +560,25 @@ const styles = StyleSheet.create({
   },
   catBtn: {
     flex: 1,
-    paddingVertical: 7,
+    paddingVertical: 6,
     borderRadius: 10,
     alignItems: 'center',
+    gap: 3,
   },
   catBtnActive: {
     backgroundColor: '#2F628C',
   },
+  catIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    opacity: 0.55,
+  },
+  catIconActive: {
+    opacity: 1,
+  },
   catBtnText: {
-    fontSize: 13,
+    fontSize: 11,
     fontFamily: 'Fredoka-Regular',
     color: '#72777F',
   },
