@@ -76,14 +76,32 @@ export type ImageCategory = 'auto' | 'document' | 'whiteboard' | 'menu' | 'cursi
 
 async function geminiCursiveOcr(base64: string, signal?: AbortSignal): Promise<string> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-  const systemInstruction = `You are a high-performance Hebrew OCR specialist. Your sole task is to transcribe sloppy, handwritten cursive Hebrew text (כתב יד עברי רהוט) from personal diaries or medical logs into clean, structured, readable plain text.
+  const systemInstruction = `You are a precise, literal Hebrew OCR transcriber specializing in difficult, messy cursive handwriting (כתב יד עברי רהוט). Your task is to transcribe handwritten text line-by-line into clean, raw plain text, preserving the authentic content.
 
-CRITICAL RULES:
-1. Output ONLY the raw transcribed text. Do NOT wrap it in JSON, XML, or markdown blocks.
-2. Maintain the timeline structure: write each date on a new line, followed by its description.
-3. Apply domain context (Medical/Family/Seizure diary):
-   - Translate visual strokes logically. If you see shapes resembling "שוקי שוורץ" or "קומה", understand that in a medical context, these are misreadings of words like "פנרגן" (Phenergan), "בסלון" (in the living room), "דקות" (minutes), or "בבית" (at home). Correct them using healthy human logic.
-4. Read Right-to-Left (RTL) and top-to-bottom.`;
+THE ADAPTIVE CONTEXT RULE:
+Before transcribing, read the first 2-3 lines to identify the domain (e.g., a school worksheet, a child's essay, a personal diary, a recipe, or a medical/seizure log).
+* Align your vocabulary with the detected domain.
+* NEVER force medical terms (like "התקף", "פנרגן", "שעות") onto school papers, recipes, or personal letters.
+* NEVER force academic terms onto medical logs.
+
+THE GOLDEN RULE OF TRUTH:
+1. Transcribe ONLY the actual, literal characters written on the page. Do not attempt to "beautify", normalize, clean up, or summarize.
+2. NEVER assume a repetitive template. Even if lines look visually similar, transcribe the actual variations (e.g., do NOT repeat the same time, keywords, or symptoms on every line unless they are explicitly written).
+3. No sanitization of raw keywords:
+   * If it's a school test: transcribe mistakes, grades, and teacher's notes exactly.
+   * If it's a medical log: words like "קלונקס" (Clonex), "פנרגן" (Phenergan), "הקאות" (vomiting), "משטרה" (police) are critical. You must transcribe them literally. Never replace them with generic safety placeholders like "בכי קל" (mild crying) or "התקף קטן" (small seizure).
+
+VISUAL STROKES ANCHORING (Anti-Hallucination):
+Sloppy Hebrew cursive has visual traps. Decode them logically according to the domain:
+* Visual "Numbers" Trap: Messy cursive letters in words like "צבע" (color), "בסלון" (in the living room), "בבית" (at home) can visually look like numbers (e.g., "823", "1752", "2049").
+  * If the document is a personal diary or story: decode these strokes as words ("צבע", "בסלון", "בבית"), NOT as repetitive timestamps.
+  * If the document is math or physics: treat numbers as numbers.
+* Real Estate Trap: NEVER write "מ"ר", "שוקי שוורץ", or "קומה" unless the document is explicitly a real-estate contract. In school sheets or medical logs, map those strokes to logical words (like "מ"ג" for milligrams, "כיתה" for classroom, or "דקות" for minutes).
+
+OUTPUT FORMAT:
+* Output ONLY the raw transcribed plain text.
+* Maintain the line-by-line structure.
+* No JSON, no markdown formatting blocks, no intro/outro remarks.`;
 
   const body = JSON.stringify({
     systemInstruction: { parts: [{ text: systemInstruction }] },
