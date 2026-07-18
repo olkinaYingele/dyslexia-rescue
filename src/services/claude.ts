@@ -409,17 +409,25 @@ Scan your generated paragraphs. If you detect phrases like "מ"ר", "קומה", 
     ],
   });
 
-  // Hybrid pipeline for auto mode: Step 1 = plain OCR, Step 2 = layout structure
+  // Auto mode: plain OCR only — no JSON schema, no system instruction, no attention collapse
   if (category === 'auto') {
-    console.log('\n[Hybrid] Starting two-step OCR pipeline');
+    console.log('\n[Auto] Starting plain OCR');
     try {
       const rawText = await geminiRawOcr(base64, signal);
       if (!rawText) throw new Error('EMPTY_RESPONSE');
-      return await geminiStructure(base64, rawText, signal);
+      const lang = /[֐-׿]/.test(rawText) ? 'he' : /[Ѐ-ӿ]/.test(rawText) ? 'ru' : 'en';
+      return {
+        paragraphs: [{
+          id: '0', index: 0, text: rawText,
+          box: { x: 0, y: 0, width: 1, height: 1 },
+          segments: [{ text: rawText, language: lang }],
+        }],
+        language: lang,
+      };
     } catch (e: any) {
       if (e.name === 'AbortError') throw e;
-      console.warn('[Hybrid] Pipeline failed, falling back to single-call auto:', e.message);
-      // Fall through to standard single-call path below with auto mode
+      console.warn('[Auto] OCR failed, falling back to single-call:', e.message);
+      // Fall through to standard single-call path below
     }
   }
 
