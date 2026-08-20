@@ -20,7 +20,6 @@ const CAT_ICONS: Record<string, any> = {
   auto:       require('../../assets/icons/автоматически.png'),
   document:   require('../../assets/icons/документ.png'),
   whiteboard: require('../../assets/icons/доска.png'),
-  cursive:    require('../../assets/icons/курсив.png'),
 };
 
 const { width } = Dimensions.get('window');
@@ -309,8 +308,8 @@ export default function HomeScreen({ onParagraphsReady, onAudioReady, uiLang, se
 
       {/* Category selector */}
       <View style={styles.catRow}>
-        {(['auto', 'document', 'whiteboard', 'cursive'] as ImageCategory[]).map(cat => {
-          const label = cat === 'auto' ? t.catAuto : cat === 'document' ? t.catDoc : cat === 'whiteboard' ? t.catBoard : t.catCursive;
+        {(['auto', 'document', 'whiteboard'] as ImageCategory[]).map(cat => {
+          const label = cat === 'auto' ? t.catAuto : cat === 'document' ? t.catDoc : cat === 'whiteboard' ? t.catBoard : t.catMenu;
           const active = category === cat;
           return (
             <TouchableOpacity
@@ -397,7 +396,7 @@ export default function HomeScreen({ onParagraphsReady, onAudioReady, uiLang, se
                           <Text style={[styles.gridDate, uiRTL ? null : { textAlign: 'left' }]}>{formatTime(item.timestamp)}</Text>
                           {item.category && (
                             <Text style={styles.gridCat}>
-                              {item.category === 'document' ? t.catDoc : item.category === 'menu' ? t.catMenu : item.category === 'whiteboard' ? t.catBoard : item.category === 'cursive' ? t.catCursive : t.catAuto}
+                              {item.category === 'document' ? t.catDoc : item.category === 'menu' ? t.catMenu : item.category === 'whiteboard' ? t.catBoard : t.catAuto}
                             </Text>
                           )}
                         </View>

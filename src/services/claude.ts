@@ -72,66 +72,7 @@ const RESPONSE_SCHEMA = {
   required: ['documentLanguage', 'paragraphs'],
 };
 
-export type ImageCategory = 'auto' | 'document' | 'whiteboard' | 'menu' | 'cursive';
-
-async function geminiCursiveOcr(base64: string, signal?: AbortSignal): Promise<string> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-  const systemInstruction = `You are a precise, literal Hebrew OCR transcriber specializing in difficult, messy cursive handwriting (כתב יד עברי רהוט). Your task is to transcribe handwritten text line-by-line into clean, raw plain text, preserving the authentic content.
-
-THE ADAPTIVE CONTEXT RULE:
-Before transcribing, read the first 2-3 lines to identify the domain (e.g., a school worksheet, a child's essay, a personal diary, a recipe, or a medical/seizure log).
-* Align your vocabulary with the detected domain.
-* NEVER force medical terms (like "התקף", "פנרגן", "שעות") onto school papers, recipes, or personal letters.
-* NEVER force academic terms onto medical logs.
-
-THE GOLDEN RULE OF TRUTH:
-1. Transcribe ONLY the actual, literal characters written on the page. Do not attempt to "beautify", normalize, clean up, or summarize.
-2. NEVER assume a repetitive template. Even if lines look visually similar, transcribe the actual variations (e.g., do NOT repeat the same time, keywords, or symptoms on every line unless they are explicitly written).
-3. No sanitization of raw keywords:
-   * If it's a school test: transcribe mistakes, grades, and teacher's notes exactly.
-   * If it's a medical log: words like "קלונקס" (Clonex), "פנרגן" (Phenergan), "הקאות" (vomiting), "משטרה" (police) are critical. You must transcribe them literally. Never replace them with generic safety placeholders like "בכי קל" (mild crying) or "התקף קטן" (small seizure).
-
-VISUAL STROKES ANCHORING (Anti-Hallucination):
-Sloppy Hebrew cursive has visual traps. Decode them logically according to the domain:
-* Visual "Numbers" Trap: Messy cursive letters in words like "צבע" (color), "בסלון" (in the living room), "בבית" (at home) can visually look like numbers (e.g., "823", "1752", "2049").
-  * If the document is a personal diary or story: decode these strokes as words ("צבע", "בסלון", "בבית"), NOT as repetitive timestamps.
-  * If the document is math or physics: treat numbers as numbers.
-* Real Estate Trap: NEVER write "מ"ר", "שוקי שוורץ", or "קומה" unless the document is explicitly a real-estate contract. In school sheets or medical logs, map those strokes to logical words (like "מ"ג" for milligrams, "כיתה" for classroom, or "דקות" for minutes).
-
-OUTPUT FORMAT:
-* Output ONLY the raw transcribed plain text.
-* Maintain the line-by-line structure.
-* No JSON, no markdown formatting blocks, no intro/outro remarks.`;
-
-  const body = JSON.stringify({
-    systemInstruction: { parts: [{ text: systemInstruction }] },
-    contents: [{
-      parts: [
-        { inline_data: { mime_type: 'image/jpeg', data: base64 } },
-        { text: 'Transcribe all the handwritten text in this image. Output plain text only.' },
-      ],
-    }],
-    generationConfig: {
-      temperature: 0.1,
-      maxOutputTokens: 4096,
-      thinkingConfig: { thinkingBudget: 2048 },
-    },
-    safetySettings: [
-      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT',  threshold: 'BLOCK_NONE' },
-      { category: 'HARM_CATEGORY_HARASSMENT',         threshold: 'BLOCK_NONE' },
-      { category: 'HARM_CATEGORY_HATE_SPEECH',        threshold: 'BLOCK_NONE' },
-      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',  threshold: 'BLOCK_NONE' },
-    ],
-  });
-
-  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal });
-  if (!res.ok) throw new Error(`CURSIVE_OCR_ERROR_${res.status}`);
-  const data = await res.json();
-  const parts = data.candidates?.[0]?.content?.parts || [];
-  const text = parts.find((p: any) => !p.thought)?.text ?? parts[0]?.text ?? '';
-  console.log('[Cursive] OCR text:', text);
-  return text.replace(/```[\w]*\n?/g, '').trim();
-}
+export type ImageCategory = 'auto' | 'document' | 'whiteboard' | 'menu';
 
 async function geminiRawOcr(base64: string, signal?: AbortSignal): Promise<string> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
@@ -169,7 +110,7 @@ export async function extractParagraphs(base64: string, signal?: AbortSignal, ca
 
   const classificationBlock = category !== 'auto'
     ? `The user has already classified this image. Skip classification and apply ONLY the ruleset for ${
-        category === 'document' ? 'MODE A' : category === 'whiteboard' ? 'MODE B' : category === 'cursive' ? 'MODE E' : 'MODE D'
+        category === 'document' ? 'MODE A' : category === 'whiteboard' ? 'MODE B' : 'MODE D'
       } below:`
     : `You are a high-performance, production-grade Hebrew OCR engine. Your sole task is to transcribe the text from the image into a single, clean, cohesive block of text.
 CRITICAL OUTPUT RULE: Output ONLY the raw transcribed text. Do NOT output JSON, XML, HTML, or markdown code blocks. Do NOT include any coordinates, bounding boxes, or metadata. Do NOT add any introductory or concluding remarks.
@@ -235,30 +176,6 @@ RULES FOR CATEGORY C: STRUCTURED TABLES & MENUS (Row-Based Consolidation)
    - Never write any objects inside the "segments" array for items in Category C.
 7. Omitting dots and keeping "segments" strictly empty [] is mandatory to ensure complete JSON responses and fast API delivery.`;
 
-  const rulesE = `══════════════════════════════════════════════════════════════════════════
-RULES FOR MODE E: CURSIVE HANDWRITING / DIARY (כתב יד / יומן)
-══════════════════════════════════════════════════════════════════════════
-You are an expert OCR engine specializing in challenging cursive Hebrew handwriting (כתב יד עברי רהוט) in personal diaries, medical logs, and handwritten notes.
-
-ANTI-HALLUCINATION — ATTENTION LOOP COLLAPSE:
-When transcribing complex cursive simultaneously with JSON bounding boxes, the model may copy dummy text or misread cursive letters as numbers. YOU MUST PREVENT THIS:
-- Every paragraph is unique. NEVER copy "text" or coordinates from a previous paragraph.
-- Isolated 3-4 digit numbers like "823", "1752", "2049" appearing inside Hebrew diary text are almost certainly misreadings of cursive Hebrew words — re-examine those strokes carefully.
-- If you see what appears to be a real-estate term (מ"ר, קומה, שוקי שוורץ) in a diary context — it is almost certainly a misread. Re-examine.
-
-TIMELINE SEGMENTATION:
-- Each distinct date (e.g., "28/6/25", "15/4/26") marks the start of a NEW, separate paragraph object.
-- The date AND all its associated description text (until the next date) must be in the SAME paragraph object.
-- Bounding box must span horizontally to fully enclose both the date and all text on that line.
-- Read Hebrew right-to-left. The rightmost token on a line is the first word.
-
-FEW-SHOT EXAMPLE (coordinates in 0–1000 scale):
-Input line: "28/6/25 צבע, בסלון, בבית | 6 דקות | 20:45"
-Output:
-{ "text": "28/6/25 צבע, בסלון, בבית | 6 דקות | 20:45", "boundingBox": { "ymin": 120, "xmin": 20, "ymax": 175, "xmax": 980 }, "segments": [{ "text": "28/6/25 צבע, בסלון, בבית | 6 דקות | 20:45", "language": "he" }] }
-
-COMPLIANCE CHECK: Before outputting, scan for "מ"ר", "קומה", "שוקי שוורץ", "1,752", "823". If found in a diary context — discard and re-transcribe using phonetic cursive decoding.`;
-
   const rulesAutoModeC = `══════════════════════════════════════════════════════════════════════════
 RULES FOR MODE C: TECHNICAL / DIAGRAM
 ══════════════════════════════════════════════════════════════════════════
@@ -269,7 +186,6 @@ RULES FOR MODE C: TECHNICAL / DIAGRAM
 
   const activeRules = category === 'document' ? rulesA
     : category === 'whiteboard' ? rulesB
-    : category === 'cursive' ? rulesE
     : category === 'menu' ? rulesC
     : '';  // auto: no extra rules, classificationBlock is the full prompt
 
@@ -314,7 +230,7 @@ Scan your generated paragraphs. If you detect phrases like "מ"ר", "קומה", 
           { inline_data: { mime_type: 'image/jpeg', data: base64 } },
           { text: category === 'auto'
               ? 'Please transcribe all the text you see in this image. Return only the transcribed text, preserving the original language and reading order.'
-              : `This is a ${category === 'document' ? 'Mode A structured document' : category === 'whiteboard' ? 'Mode B handwritten/spatial image' : category === 'cursive' ? 'Mode E cursive Hebrew diary' : 'Mode D menu or price list'}. Apply the ruleset for this mode. Transcribe every word exactly. Return bounding boxes as ymin/xmin/ymax/xmax in 0–1000 scale.`
+              : `This is a ${category === 'document' ? 'Mode A structured document' : category === 'whiteboard' ? 'Mode B handwritten/spatial image' : 'Mode D menu or price list'}. Apply the ruleset for this mode. Transcribe every word exactly. Return bounding boxes as ymin/xmin/ymax/xmax in 0–1000 scale.`
           },
         ],
       },
@@ -323,7 +239,7 @@ Scan your generated paragraphs. If you detect phrases like "מ"ר", "קומה", 
       temperature: category === 'auto' ? 0.7 : 0.1,
       maxOutputTokens: 8192,
       ...(category !== 'auto' && { responseMimeType: 'application/json', responseSchema: RESPONSE_SCHEMA }),
-      thinkingConfig: { thinkingBudget: (category === 'whiteboard' || category === 'cursive') ? 2048 : 0 },
+      thinkingConfig: { thinkingBudget: category === 'whiteboard' ? 2048 : 0 },
     },
     safetySettings: [
       { category: 'HARM_CATEGORY_DANGEROUS_CONTENT',  threshold: 'BLOCK_NONE' },
@@ -332,26 +248,6 @@ Scan your generated paragraphs. If you detect phrases like "מ"ר", "קומה", 
       { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',  threshold: 'BLOCK_NONE' },
     ],
   });
-
-  // Cursive/Diary mode: plain text OCR, no JSON, no bounding boxes
-  if (category === 'cursive') {
-    console.log('\n[Cursive] Starting plain-text diary OCR');
-    try {
-      const rawText = await geminiCursiveOcr(base64, signal);
-      if (!rawText) throw new Error('EMPTY_RESPONSE');
-      return {
-        paragraphs: [{
-          id: '0', index: 0, text: rawText,
-          box: { x: 0, y: 0, width: 1, height: 1 },
-          segments: [{ text: rawText, language: 'he' }],
-        }],
-        language: 'he',
-      };
-    } catch (e: any) {
-      if (e.name === 'AbortError') throw e;
-      console.warn('[Cursive] OCR failed, falling back to JSON path:', e.message);
-    }
-  }
 
   // Auto mode: Gemini Flash plain OCR (no system instruction, no JSON schema)
   if (category === 'auto') {

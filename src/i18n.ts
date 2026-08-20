@@ -40,7 +40,6 @@ export const UI = {
     catDoc: 'Document',
     catMenu: 'Menu',
     catBoard: 'Board',
-    catCursive: 'Diary',
     langToggle: 'עב',
   },
   he: {
@@ -82,7 +81,6 @@ export const UI = {
     catDoc: 'מסמך',
     catMenu: 'תפריט',
     catBoard: 'לוח',
-    catCursive: 'יומן',
     langToggle: 'EN',
   },
 };
