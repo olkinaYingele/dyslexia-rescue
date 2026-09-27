@@ -49,6 +49,9 @@
           "cameraPermission": "Read Me Aloud needs camera access to photograph text for reading."
         }
       ],
+      "expo-splash-screen",
+      "expo-status-bar",
+      "expo-audio"
     ],
     "extra": {
       "eas": {

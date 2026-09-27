@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Speech from 'expo-speech';
-import { Audio } from 'expo-av';
+import { setAudioModeAsync, createAudioPlayer, AudioPlayer } from 'expo-audio';
 import { Feather } from '@expo/vector-icons';
 import { Paragraph, ImageCategory } from '../services/claude';
 import { ParagraphAudio } from '../services/tts';
@@ -214,7 +214,7 @@ function getDistance(touches: any[]): number {
 export default function BoardScreen({ imageUri, paragraphs, language, isCached, timestamp, category, onExit, onDelete, uiLang, audio }: Props) {
   const t = UI[uiLang];
   const uiRTL = uiLang === 'he';
-  const soundRef = useRef<Audio.Sound | null>(null);
+  const soundRef = useRef<AudioPlayer | null>(null);
   // Если пользователь тапнул абзац пока Google-аудио ещё не готово — сохраняем здесь.
   // Когда audio придёт через проп, запускаем его автоматически.
   const pendingParagraphRef = useRef<Paragraph | null>(null);
@@ -311,19 +311,19 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
 
   useEffect(() => {
     // Конфигурируем аудио: не играть в фоне (по умолчанию iOS может продолжать)
-    Audio.setAudioModeAsync({
-      staysActiveInBackground: false,
-      playsInSilentModeIOS: true,
-      shouldDuckAndroid: true,
+    setAudioModeAsync({
+      shouldPlayInBackground: false,
+      playsInSilentMode: true,
+      interruptionMode: 'duckOthers',
     }).catch(() => {});
 
-    // Прогрев аудио-движка — первое expo-av обращение долгое.
-    // Загружаем и сразу выгружаем первое аудио, чтобы пользователь не ждал на первом тапе.
+    // Прогрев аудио-движка — первое обращение долгое.
     if (audio?.[0]?.segments?.[0]) {
       const seg = audio[0].segments[0];
-      Audio.Sound.createAsync({ uri: seg.audioUri }).then(({ sound }) => {
-        sound.unloadAsync().catch(() => {});
-      }).catch(() => {});
+      try {
+        const warmup = createAudioPlayer({ uri: seg.audioUri });
+        setTimeout(() => { try { warmup.remove(); } catch {} }, 200);
+      } catch {}
     }
 
     // Останавливаем чтение при сворачивании / блокировке экрана
@@ -331,8 +331,7 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
       if (state !== 'active') {
         sessionRef.current++;  // Инвалидируем колбэки
         Speech.stop();
-        soundRef.current?.stopAsync().catch(() => {});
-        soundRef.current?.unloadAsync().catch(() => {});
+        try { soundRef.current?.pause(); soundRef.current?.remove(); } catch {}
         soundRef.current = null;
         setIsPlaying(false);
         setIsPaused(false);
@@ -342,8 +341,10 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
 
     return () => {
       sub.remove();
+      sessionRef.current++;
       Speech.stop();
-      soundRef.current?.unloadAsync().catch(() => {});
+      try { soundRef.current?.pause(); soundRef.current?.remove(); } catch {}
+      soundRef.current = null;
     };
   }, []);
 
@@ -524,27 +525,23 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
     setTimeout(() => speakSegment(0, 0), 150);
   }, [language]);
 
-  // Основной путь (обе платформы): играем готовое Google-аудио из кэша через expo-av.
-  // expo-av настроен playsInSilentModeIOS — звучит даже при беззвучном режиме на iOS.
-  const startReadingAudio = useCallback(async (p: Paragraph) => {
+  // Основной путь (обе платформы): играем готовое Google-аудио из кэша через expo-audio.
+  // setAudioModeAsync playsInSilentModeIOS — звучит даже при беззвучном режиме на iOS.
+  const startReadingAudio = useCallback((p: Paragraph) => {
     const paragraphAudio = audio?.[p.index];
     if (!paragraphAudio || paragraphAudio.segments.length === 0) {
-      // Fallback на expo-speech если аудио нет (например, не сгенерировалось)
       startReadingLive(p);
       return;
     }
 
-    // Новая сессия — инвалидирует все async-колбэки от предыдущих звуков
     const session = ++sessionRef.current;
 
-    // Остановить предыдущее воспроизведение (expo-av или expo-speech если был fallback)
     Speech.stop();
     if (soundRef.current) {
-      try { await soundRef.current.unloadAsync(); } catch {}
+      try { soundRef.current.pause(); soundRef.current.remove(); } catch {}
       soundRef.current = null;
     }
 
-    // Если за время unload пришла новая команда (тап на третий абзац) — выйти
     if (session !== sessionRef.current) return;
 
     const { words: wordList, lineBreaks: breaks } = parseWords(p.text);
@@ -555,14 +552,13 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
     setIsPlaying(true);
     setIsPaused(false);
 
-    // Базовый индекс слова для каждого сегмента (сегменты идут подряд)
     const segmentBaseIdx: number[] = [0];
     for (let i = 0; i < paragraphAudio.segments.length - 1; i++) {
       segmentBaseIdx.push(segmentBaseIdx[i] + paragraphAudio.segments[i].words.length);
     }
 
-    const playSegment = async (idx: number) => {
-      if (session !== sessionRef.current) return;  // Сессия устарела — выходим
+    const playSegment = (idx: number) => {
+      if (session !== sessionRef.current) return;
       if (idx >= paragraphAudio.segments.length) {
         setIsPlaying(false);
         setCurrentWordIndex(-1);
@@ -573,27 +569,26 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
       const baseWordIdx = segmentBaseIdx[idx];
 
       try {
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: seg.audioUri },
-          { progressUpdateIntervalMillis: 50 }  // короткие слова требуют частого опроса
-        );
+        const player = createAudioPlayer({ uri: seg.audioUri }, { updateInterval: 50 });
         if (session !== sessionRef.current) {
-          // Пока создавали звук — пришла новая команда. Не играем.
-          try { await sound.unloadAsync(); } catch {}
+          player.remove();
           return;
         }
-        soundRef.current = sound;
+        soundRef.current = player;
 
-        sound.setOnPlaybackStatusUpdate(async status => {
-          if (session !== sessionRef.current) return;  // Колбэк устарел
-          if (!status.isLoaded) return;
+        player.addListener('playbackStatusUpdate', (status) => {
+          if (session !== sessionRef.current) {
+            player.pause();
+            player.remove();
+            return;
+          }
           if (status.didJustFinish) {
-            try { await sound.unloadAsync(); } catch {}
-            if (session !== sessionRef.current) return;
+            player.remove();
+            soundRef.current = null;
             playSegment(idx + 1);
             return;
           }
-          const posSec = (status.positionMillis || 0) / 1000;
+          const posSec = status.currentTime || 0;
           let localIdx = 0;
           for (let i = 0; i < seg.words.length; i++) {
             if (seg.wordTimes[i] <= posSec) localIdx = i;
@@ -602,7 +597,7 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
           setCurrentWordIndex(baseWordIdx + localIdx);
         });
 
-        await sound.playAsync();
+        player.play();
       } catch (e) {
         console.warn('[BoardScreen] Audio play error:', e);
         if (session === sessionRef.current) {
@@ -631,9 +626,9 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
   }, [audio, startReadingAudio]);
 
   // Управление зависит от активного источника: плеер expo-av (soundRef) или живой синтез.
-  const pauseReading = async () => {
+  const pauseReading = () => {
     if (soundRef.current) {
-      try { await soundRef.current.pauseAsync(); } catch {}
+      try { soundRef.current.pause(); } catch {}
     } else {
       Speech.pause();
     }
@@ -641,9 +636,9 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
     setIsPaused(true);
   };
 
-  const resumeReading = async () => {
+  const resumeReading = () => {
     if (soundRef.current) {
-      try { await soundRef.current.playAsync(); } catch {}
+      try { soundRef.current.play(); } catch {}
     } else {
       Speech.resume();
     }
@@ -651,13 +646,11 @@ export default function BoardScreen({ imageUri, paragraphs, language, isCached, 
     setIsPaused(false);
   };
 
-  const stopReading = async () => {
-    // Инвалидируем все активные колбэки, чтобы они не дёргали playSegment дальше
+  const stopReading = () => {
     sessionRef.current++;
     Speech.stop();
     if (soundRef.current) {
-      try { await soundRef.current.stopAsync(); } catch {}
-      try { await soundRef.current.unloadAsync(); } catch {}
+      try { soundRef.current.pause(); soundRef.current.remove(); } catch {}
       soundRef.current = null;
     }
     setIsPlaying(false);
