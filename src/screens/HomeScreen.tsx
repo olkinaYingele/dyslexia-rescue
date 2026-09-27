@@ -84,11 +84,13 @@ export default function HomeScreen({ onParagraphsReady, onAudioReady, uiLang, se
   const [recent, setRecent] = useState<CachedScreen[]>([]);
   const [deleteDayModal, setDeleteDayModal] = useState<DayGroup | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showSourceModal, setShowSourceModal] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const handleSetCategory = (c: ImageCategory) => {
     setCategory(c);
     AsyncStorage.setItem(CATEGORY_KEY, c);
+    setShowSourceModal(true);
   };
 
   const showError = (title: string, message: string) => Alert.alert(title, message);
@@ -294,18 +296,6 @@ export default function HomeScreen({ onParagraphsReady, onAudioReady, uiLang, se
         )}
       </View>
 
-      {/* Action buttons */}
-      <View style={styles.buttons}>
-        <TouchableOpacity style={styles.btn} onPress={takePhoto} activeOpacity={0.85}>
-          <Feather name="camera" size={20} color="#FFFFFF" />
-          <Text style={styles.btnText}>{t.camera}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.btn} onPress={pickFromGallery} activeOpacity={0.85}>
-          <Feather name="image" size={20} color="#FFFFFF" />
-          <Text style={styles.btnText}>{t.gallery}</Text>
-        </TouchableOpacity>
-      </View>
-
       {/* Category selector */}
       <View style={styles.catRow}>
         {(['auto', 'document', 'whiteboard'] as ImageCategory[]).map(cat => {
@@ -413,6 +403,23 @@ export default function HomeScreen({ onParagraphsReady, onAudioReady, uiLang, se
         </ScrollView>
       )}
 
+      {/* Source picker modal */}
+      <Modal visible={showSourceModal} transparent animationType="fade">
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowSourceModal(false)}>
+          <View style={styles.sourceCard}>
+            <TouchableOpacity style={styles.sourceBtn} activeOpacity={0.85} onPress={() => { setShowSourceModal(false); takePhoto(); }}>
+              <Feather name="camera" size={28} color="#FFFFFF" />
+              <Text style={styles.sourceBtnText}>{t.camera}</Text>
+            </TouchableOpacity>
+            <View style={styles.sourceDivider} />
+            <TouchableOpacity style={styles.sourceBtn} activeOpacity={0.85} onPress={() => { setShowSourceModal(false); pickFromGallery(); }}>
+              <Feather name="image" size={28} color="#FFFFFF" />
+              <Text style={styles.sourceBtnText}>{t.gallery}</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
       {/* Onboarding modal */}
       <Modal visible={showOnboarding} transparent animationType="fade">
         <View style={styles.modalOverlay}>
@@ -519,38 +526,40 @@ const styles = StyleSheet.create({
   },
 
   // Buttons
-  buttons: {
-    flexDirection: 'row',
-    marginHorizontal: 24,
-    marginTop: 20,
-    marginBottom: 24,
-    gap: 12,
+  sourceCard: {
+    backgroundColor: '#2F628C',
+    borderRadius: 20,
+    alignSelf: 'stretch',
+    marginHorizontal: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
   },
-  btn: {
-    flex: 1,
+  sourceBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#2F628C',
-    borderRadius: 16,
-    paddingVertical: 16,
-    gap: 8,
-    shadowColor: '#2F628C',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
+    paddingVertical: 22,
+    gap: 12,
   },
-  btnText: {
-    fontSize: 16,
+  sourceBtnText: {
+    fontSize: 20,
     fontFamily: 'Fredoka-Medium',
     color: '#FFFFFF',
   },
+  sourceDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    marginHorizontal: 20,
+  },
 
-  // Feedback
   catRow: {
     flexDirection: 'row',
     marginHorizontal: 16,
+    marginTop: 20,
     marginBottom: 4,
     backgroundColor: '#E8EDF5',
     borderRadius: 12,
